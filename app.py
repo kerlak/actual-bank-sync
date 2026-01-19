@@ -13,10 +13,10 @@ def run(playwright: Playwright) -> None:
     page.goto("https://www.ibercaja.es/")
     page.get_by_role("link", name="Acceso clientes").click()
     page.get_by_role("textbox", name="Código de identificación").click()
-    #codigo = getpass.getpass("\nCódigo de identificación: ").strip()
+    codigo = getpass.getpass("\nCódigo de identificación: ").strip()
     page.get_by_role("textbox", name="Código de identificación").fill(codigo)
     page.get_by_role("textbox", name="Clave de acceso").click()
-    #clave = getpass.getpass("\nClave de acceso: ").strip()
+    clave = getpass.getpass("\nClave de acceso: ").strip()
     page.get_by_role("textbox", name="Clave de acceso").fill(clave)
     page.get_by_role("button", name=" entrar").click()
     page.locator(".ui-table__row").click()
@@ -24,7 +24,7 @@ def run(playwright: Playwright) -> None:
     with page.expect_download() as download_info:
         page.get_by_role("listitem").filter(has_text="Excel").click()
     download = download_info.value
-    downloads_folder = "downloads"
+    downloads_folder = "/tmp/downloads"
     # Crear carpeta si no existe
     if not os.path.exists(downloads_folder):
       os.makedirs(downloads_folder)
@@ -39,9 +39,6 @@ def run(playwright: Playwright) -> None:
     df.to_csv(csv_path, index=False)
     print(f"Archivo CSV guardado en: {csv_path}")
     
-    page.get_by_role("button", name="Configurar").click()
-    page.get_by_role("button", name="Guardar configuración").click()
-
     # ---------------------
     context.close()
     browser.close()
