@@ -1,0 +1,4 @@
+# List all the Python packages required for this project here.
+# For example:
+flask==2.0.1
+requests==2.25.1
