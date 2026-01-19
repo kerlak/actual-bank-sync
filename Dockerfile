@@ -18,6 +18,9 @@ WORKDIR /app
 # 3. Copiamos archivos
 COPY app.py .
 COPY run.sh .
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 4. Permisos de ejecución
 RUN chmod +x run.sh
