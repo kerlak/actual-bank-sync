@@ -3,8 +3,6 @@ from playwright.sync_api import Playwright, sync_playwright, expect
 import getpass
 import os
 import pandas as pd
-codigo = ""
-clave = ""
 
 def run(playwright: Playwright) -> None:
     browser = playwright.chromium.launch(headless=False)
@@ -42,7 +40,6 @@ def run(playwright: Playwright) -> None:
     # ---------------------
     context.close()
     browser.close()
-
 
 with sync_playwright() as playwright:
     run(playwright)
