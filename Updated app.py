@@ -4,7 +4,7 @@ import getpass
 import os
 import pandas as pd
 
-def run(playwright: Playwright) -> None:
+def run(playwright: Playwright, download_directory: str) -> None:
     browser = playwright.chromium.launch(headless=False)
     context = browser.new_context()
     page = context.new_page()
@@ -42,5 +42,4 @@ def run(playwright: Playwright) -> None:
     browser.close()
 
 with sync_playwright() as playwright:
-    run(playwright)
-
+    run(playwright, download_directory="/tmp/downloads")

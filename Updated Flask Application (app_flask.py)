@@ -10,7 +10,7 @@ download_directory = "/tmp/downloads"
 
 # Function to run app.py and capture logs
 def run_app():
-    process = subprocess.Popen(['python', 'app.py'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    process = subprocess.Popen(['python', 'app.py', download_directory], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     while True:
         output = process.stdout.readline()
         if output == b'' and process.poll() is not None:
