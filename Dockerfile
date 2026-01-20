@@ -17,6 +17,7 @@ WORKDIR /app
 
 # 3. Copiamos archivos
 COPY app.py .
+COPY webui.py .
 COPY run.sh .
 COPY requirements.txt .
 
