@@ -2,7 +2,7 @@ import sys
 import io
 from unittest.mock import patch
 from pywebio.input import input as pyi_input
-from pywebio.output import put_markdown, put_text, put_error, put_success
+from pywebio.output import put_markdown, put_text, put_button
 from playwright.sync_api import sync_playwright
 from app import run as run_app
 
@@ -25,49 +25,10 @@ def dynamic_getpass(prompt=""):
     return pyi_input(type='password')
 
 
-def main():
-    from pywebio import config
-    config(
-        title="Ibercaja Movements Downloader",
-        theme='dark',
-        css_style="""
-        body {
-            background-color: #1e1e1e;
-            color: #e0e0e0;
-        }
-        .container {
-            background-color: #2d2d2d;
-            border-radius: 8px;
-            padding: 20px;
-        }
-        a {
-            color: #4a9eff;
-        }
-        .btn {
-            background-color: #0d47a1;
-            border-color: #0d47a1;
-            color: white;
-        }
-        .btn:hover {
-            background-color: #1565c0;
-            border-color: #1565c0;
-        }
-        input, textarea, select {
-            background-color: #3d3d3d;
-            color: #e0e0e0;
-            border-color: #555;
-        }
-        .footer {
-            display: none !important;
-        }
-        """
-    )
-    
-    put_markdown("# Ibercaja Movements Downloader")
-    put_markdown("The application will request your credentials when needed.")
+def execute_download():
+    """Ejecuta la descarga cuando el usuario hace click en el botón"""
     put_markdown("---")
-    put_markdown("## Starting download...")
-    put_markdown("```")
+    put_markdown("## Execution log...")
     
     try:
         # Capturar stdout
@@ -83,16 +44,26 @@ def main():
         
         sys.stdout = old_stdout
         print("[WEBUI] Process completed successfully")
-        put_markdown("```")
-        put_success("✅ Download completed successfully. Files available in ./downloads")
+        put_text("[PROCESS] ✓ Download completed successfully. Files available in ./downloads")
     
     except Exception as e:
         sys.stdout = old_stdout
-        put_markdown("```")
         print(f"[WEBUI] Error: {str(e)}")
-        put_error(f"❌ Error during execution: {str(e)}")
+        put_text(f"[ERROR] ✗ Error during execution: {str(e)}")
         import traceback
         put_text(traceback.format_exc())
+
+
+def main():
+    from pywebio import config
+    config(title="Ibercaja Movements Downloader")
+    
+    put_markdown("# Ibercaja Movements Downloader")
+    put_markdown("Click the button below to start the download process.")
+    put_markdown("The application will request your credentials when needed.")
+    put_markdown("")
+    
+    put_button("▶ START DOWNLOAD", onclick=execute_download)
 
 
 if __name__ == "__main__":
