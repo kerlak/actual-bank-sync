@@ -5,7 +5,7 @@ import os
 from typing import Optional
 
 import pandas as pd
-from playwright.sync_api import Playwright, sync_playwright, Page, BrowserContext
+from playwright.sync_api import Playwright, sync_playwright, Page, Browser, BrowserContext
 
 # Constants
 IBERCAJA_URL = "https://www.ibercaja.es/"
@@ -65,38 +65,16 @@ def login(page: Page, codigo: str, clave: str) -> None:
     print("[APP] Login completed")
 
 
-def handle_cookies_banner(page: Page) -> None:
-    """Remove or accept cookies banner if present.
+def handle_blocking_elements(page: Page) -> None:
+    """Remove cookies banner and modal overlays that may block interaction.
+
+    Attempts to hide or remove blocking elements using JavaScript injection.
+    Retries multiple times if overlays persist.
 
     Args:
         page: Playwright page instance.
     """
-    print("[APP] Checking for cookies banner...")
-
-    try:
-        # Try to remove cookies banner via JavaScript
-        page.evaluate("""
-            const cookiesBanner = document.querySelector('.container-cookies');
-            if (cookiesBanner) cookiesBanner.remove();
-
-            const cookiesElement = document.querySelector('cookies');
-            if (cookiesElement) cookiesElement.remove();
-        """)
-        print("[APP] Cookies banner removed via JavaScript")
-    except Exception as e:
-        print(f"[APP] Cookies banner handling: {str(e)[:50]}")
-
-
-def handle_modal_overlay(page: Page) -> None:
-    """Remove modal overlays that may block interaction.
-
-    Attempts to hide or remove overlay elements using JavaScript injection.
-    Retries multiple times if the overlay persists.
-
-    Args:
-        page: Playwright page instance.
-    """
-    print("[APP] Handling modal overlay...")
+    print("[APP] Removing blocking elements (cookies, overlays)...")
 
     for attempt in range(MAX_MODAL_REMOVAL_ATTEMPTS):
         try:
@@ -120,13 +98,13 @@ def handle_modal_overlay(page: Page) -> None:
 
             overlay = page.locator(".overlay")
             if not overlay.is_visible(timeout=MODAL_CHECK_TIMEOUT_MS):
-                print(f"[APP] Overlay cleared (attempt {attempt + 1})")
+                print(f"[APP] Blocking elements cleared (attempt {attempt + 1})")
                 break
             else:
                 print(f"[APP] Overlay still visible, retrying (attempt {attempt + 1})...")
                 page.wait_for_timeout(MODAL_WAIT_BETWEEN_ATTEMPTS_MS)
         except Exception as e:
-            print(f"[APP] Overlay handling done (attempt {attempt + 1}): {str(e)[:50]}")
+            print(f"[APP] Blocking elements handled (attempt {attempt + 1}): {str(e)[:50]}")
             break
 
 
@@ -194,7 +172,7 @@ def convert_excel_to_csv(excel_path: str) -> str:
     return csv_path
 
 
-def cleanup(context: Optional[BrowserContext], browser: Optional[object]) -> None:
+def cleanup(context: Optional[BrowserContext], browser: Optional[Browser]) -> None:
     """Close browser context and browser instance.
 
     Args:
@@ -241,13 +219,8 @@ def run(playwright: Playwright) -> None:
         # Perform login
         login(page, codigo, clave)
 
-        # Handle cookies banner and modal overlays
-        handle_cookies_banner(page)
-        handle_modal_overlay(page)
-
-        # Clear any remaining blocking elements before download
-        handle_cookies_banner(page)
-        handle_modal_overlay(page)
+        # Remove blocking elements (cookies banner, modal overlays)
+        handle_blocking_elements(page)
 
         # Download movements Excel
         excel_path = download_movements(page)

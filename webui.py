@@ -26,49 +26,13 @@ class CredentialStore:
     clave: Optional[str] = field(default=None)
 
     def has_credentials(self) -> bool:
-        """Check if both credentials are stored.
-
-        Returns:
-            True if both identification code and access key are stored.
-        """
+        """Check if both credentials are stored."""
         return self.codigo is not None and self.clave is not None
 
     def clear(self) -> None:
         """Clear all stored credentials."""
         self.codigo = None
         self.clave = None
-
-    def get_codigo(self) -> Optional[str]:
-        """Get stored identification code.
-
-        Returns:
-            The stored identification code or None.
-        """
-        return self.codigo
-
-    def set_codigo(self, value: str) -> None:
-        """Store identification code.
-
-        Args:
-            value: The identification code to store.
-        """
-        self.codigo = value
-
-    def get_clave(self) -> Optional[str]:
-        """Get stored access key.
-
-        Returns:
-            The stored access key or None.
-        """
-        return self.clave
-
-    def set_clave(self, value: str) -> None:
-        """Store access key.
-
-        Args:
-            value: The access key to store.
-        """
-        self.clave = value
 
 
 # Global credential store instance
@@ -80,19 +44,6 @@ def auto_scroll() -> None:
     put_html("""<script>
     window.scrollTo(0, document.body.scrollHeight);
     document.querySelectorAll('footer, .pywebio-footer, [class*="footer"]').forEach(el => el.style.display = 'none');
-    </script>""")
-
-
-def hide_footer() -> None:
-    """Hide PyWebIO footer using CSS and JavaScript."""
-    put_html("""<script>
-    // CSS injection to hide footer
-    const style = document.createElement('style');
-    style.textContent = '.pywebio-footer { display: none !important; }';
-    document.head.appendChild(style);
-    // JavaScript removal as fallback
-    const footer = document.querySelector('[id*="footer"]') || document.querySelector('.pywebio-footer');
-    if (footer) footer.remove();
     </script>""")
 
 
@@ -134,24 +85,20 @@ def dynamic_getpass(prompt: str = "") -> str:
     prompt_lower = prompt.lower()
 
     if "identification" in prompt_lower or "identificacion" in prompt_lower:
-        stored = credential_store.get_codigo()
-        if stored:
-            put_text(f"Using stored identification code: {'*' * len(stored)}")
-            return stored
+        if credential_store.codigo:
+            put_text(f"Using stored identification code: {'*' * len(credential_store.codigo)}")
+            return credential_store.codigo
         else:
-            codigo = pyi_input(type='password')
-            credential_store.set_codigo(codigo)
-            return codigo
+            credential_store.codigo = pyi_input(type='password')
+            return credential_store.codigo
 
     elif "access" in prompt_lower or "acceso" in prompt_lower:
-        stored = credential_store.get_clave()
-        if stored:
-            put_text(f"Using stored access key: {'*' * len(stored)}")
-            return stored
+        if credential_store.clave:
+            put_text(f"Using stored access key: {'*' * len(credential_store.clave)}")
+            return credential_store.clave
         else:
-            clave = pyi_input(type='password')
-            credential_store.set_clave(clave)
-            return clave
+            credential_store.clave = pyi_input(type='password')
+            return credential_store.clave
 
     else:
         return pyi_input(type='password')
