@@ -66,7 +66,7 @@ class CredentialType(Enum):
     DIA = auto()
     MES = auto()
     ANO = auto()
-    PIN = auto()
+    PIN_DIGITS = auto()  # Interactive: only 3 specific digits requested by ING
 
 
 @dataclass
@@ -76,12 +76,11 @@ class AppState:
     # Ibercaja credentials
     ibercaja_codigo: Optional[str] = None
     ibercaja_clave: Optional[str] = None
-    # ING credentials
+    # ING credentials (no PIN stored - requested interactively each time)
     ing_dni: Optional[str] = None
     ing_dia: Optional[str] = None
     ing_mes: Optional[str] = None
     ing_ano: Optional[str] = None
-    ing_pin: Optional[str] = None
     # Request tracking
     _credential_queue: list = field(default_factory=list)
     _queue_index: int = 0
@@ -92,10 +91,10 @@ class AppState:
         self._queue_index = 0
 
     def setup_ing_queue(self) -> None:
-        """Setup credential request queue for ING."""
+        """Setup credential request queue for ING (PIN requested interactively later)."""
         self._credential_queue = [
             CredentialType.DNI, CredentialType.DIA,
-            CredentialType.MES, CredentialType.ANO, CredentialType.PIN
+            CredentialType.MES, CredentialType.ANO
         ]
         self._queue_index = 0
 
@@ -114,11 +113,8 @@ class AppState:
         return self.ibercaja_codigo is not None and self.ibercaja_clave is not None
 
     def has_ing_credentials(self) -> bool:
-        """Check if ING credentials are stored."""
-        return all([
-            self.ing_dni, self.ing_dia, self.ing_mes,
-            self.ing_ano, self.ing_pin
-        ])
+        """Check if ING credentials are stored (PIN not stored for security)."""
+        return all([self.ing_dni, self.ing_dia, self.ing_mes, self.ing_ano])
 
     def clear_ibercaja(self) -> None:
         """Clear Ibercaja credentials."""
@@ -131,7 +127,6 @@ class AppState:
         self.ing_dia = None
         self.ing_mes = None
         self.ing_ano = None
-        self.ing_pin = None
 
     def clear_all(self) -> None:
         """Clear all credentials."""
@@ -205,7 +200,22 @@ def dynamic_getpass_ibercaja(prompt: str = "") -> str:
 
 
 def dynamic_getpass_ing(prompt: str = "") -> str:
-    """Dynamic getpass for ING credentials."""
+    """Dynamic getpass for ING credentials.
+
+    Handles both initial credentials and interactive PIN digits request.
+    PIN digits are requested with format "PIN_DIGITS:pos1,pos2,pos3:"
+    """
+    # Check for interactive PIN digits request (format: "PIN_DIGITS:1,3,6:")
+    if prompt.startswith("PIN_DIGITS:"):
+        positions_str = prompt.replace("PIN_DIGITS:", "").rstrip(":")
+        positions = [int(p) for p in positions_str.split(",")]
+        put_text(f"> Enter PIN digits for positions: {positions}")
+        put_text(f"  [ {' '.join(f'{p}ª' for p in positions)} ]")
+        blur_active_element()
+        pin_digits = pyi_input(type='password')
+        return pin_digits
+
+    # Regular credential flow
     if prompt:
         put_text(f"> {prompt.strip()}")
 
@@ -247,16 +257,6 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
         state.ing_ano = pyi_input(type='password')
         state.advance()
         return state.ing_ano
-
-    elif cred_type == CredentialType.PIN:
-        if state.ing_pin:
-            put_text(f"Using stored PIN: {'*' * len(state.ing_pin)}")
-            state.advance()
-            return state.ing_pin
-        put_text("  [ * * * * * * ]")
-        state.ing_pin = pyi_input(type='password')
-        state.advance()
-        return state.ing_pin
 
     return ""
 
@@ -318,6 +318,7 @@ def show_ibercaja() -> None:
     state.current_bank = Bank.IBERCAJA
     clear()
 
+    inject_styles()
     put_text("ibercaja")
     put_text("--------")
     put_text("")
@@ -343,6 +344,7 @@ def show_ing() -> None:
     state.current_bank = Bank.ING
     clear()
 
+    inject_styles()
     put_text("ing")
     put_text("---")
     put_text("")
@@ -393,11 +395,17 @@ def handle_menu_selection(bank: str) -> None:
         show_ing()
 
 
+def inject_styles() -> None:
+    """Inject CSS styles immediately to prevent FOUC (Flash of Unstyled Content)."""
+    put_html(f'<style>{CSS_THEME}</style>')
+
+
 def show_menu() -> None:
     """Show main menu."""
     state.current_bank = None
     clear()
 
+    inject_styles()
     blur_active_element()
 
     put_text("banking hub")

@@ -12,25 +12,34 @@ from playwright.sync_api import Playwright, Page, Browser, BrowserContext
 # Constants
 ING_URL = "https://ing.ingdirect.es/app-login/"
 DOWNLOADS_FOLDER = "./downloads/ing"
-EXCEL_HEADER_ROW = 0  # ING Excel files have header in first row
+EXCEL_HEADER_ROW = 3  # ING Excel files have header in row 4 (0-indexed: 3)
 
 
 def get_credentials() -> dict:
-    """Prompt user for ING bank credentials."""
+    """Prompt user for ING bank credentials (without PIN)."""
     print("\n[ING] Enter your credentials:")
     dni = getpass.getpass("DNI: ").strip()
     dia = getpass.getpass("Birth Day (DD): ").strip()
     mes = getpass.getpass("Birth Month (MM): ").strip()
     ano = getpass.getpass("Birth Year (YYYY): ").strip()
-    pin = getpass.getpass("Full PIN (6 digits): ").strip()
 
     return {
         'dni': dni,
         'dia': dia,
         'mes': mes,
-        'ano': ano,
-        'pin': pin
+        'ano': ano
     }
+
+
+def get_pin_digits(positions: list[int]) -> str:
+    """Request only the specific PIN digits needed.
+
+    Uses a special prompt format "PIN_DIGITS:pos1,pos2,pos3:" that the WebUI
+    can parse to show which positions are requested.
+    """
+    positions_str = ','.join(str(p) for p in positions)
+    prompt = f"PIN_DIGITS:{positions_str}:"
+    return getpass.getpass(prompt).strip()
 
 
 def get_pin_positions(text: str) -> list[int]:
@@ -60,14 +69,35 @@ def debug_element_exists(page: Page, selector: str, description: str) -> bool:
 
 
 def convert_excel_to_csv(excel_path: str) -> str:
-    """Convert downloaded Excel file to CSV format."""
+    """Convert downloaded Excel file to CSV format matching Ibercaja output."""
     csv_path = excel_path.replace('.xlsx', '.csv')
     print(f"[ING] Converting {os.path.basename(excel_path)} to CSV...")
 
-    df = pd.read_excel(excel_path, header=EXCEL_HEADER_ROW, engine='openpyxl')
+    # ING files are actually XLS format (Composite Document) despite .xlsx extension
+    df = pd.read_excel(excel_path, header=EXCEL_HEADER_ROW, engine='xlrd')
     print(f"[ING] Data loaded: {len(df)} rows")
 
-    df.to_csv(csv_path, index=False)
+    # Create output DataFrame matching Ibercaja format
+    output_df = pd.DataFrame()
+
+    # Map columns to Ibercaja format
+    output_df['Nº Orden'] = range(1, len(df) + 1)
+
+    # Format dates as DD-MM-YYYY
+    date_col = df['F. VALOR']
+    output_df['Fecha Oper'] = pd.to_datetime(date_col).dt.strftime('%d-%m-%Y')
+    output_df['Fecha Valor'] = output_df['Fecha Oper']
+
+    # Map concept from category
+    output_df['Concepto'] = df['CATEGORÍA']
+    output_df['Descripción'] = df['DESCRIPCIÓN']
+    output_df['Referencia'] = df['COMENTARIO'].fillna('')
+
+    # Amounts and balance
+    output_df['Importe'] = df['IMPORTE (€)']
+    output_df['Saldo'] = df['SALDO (€)']
+
+    output_df.to_csv(csv_path, index=False)
     print(f"[ING] CSV saved: {csv_path}")
 
     return csv_path
@@ -231,8 +261,8 @@ def run(playwright: Playwright) -> None:
 
         print(f"[ING] PIN positions requested: {positions}")
 
-        # Extract PIN digits for requested positions
-        pin_digits = ''.join(credentials['pin'][pos - 1] for pos in positions if pos <= len(credentials['pin']))
+        # Request only the specific PIN digits needed (more secure - no full PIN stored)
+        pin_digits = get_pin_digits(positions)
         print(f"[ING] Entering {len(pin_digits)} PIN digits...")
 
         # Click numpad buttons
