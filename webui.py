@@ -145,23 +145,38 @@ def main() -> None:
         title="ibercaja",
         css_style="""
             footer, .pywebio-footer, [class*='footer'] { display: none !important; }
-            body { font-family: monospace; background: #1a1a1a; color: #00ff00; }
-            .markdown-body { color: #00ff00; }
+            body { font-family: monospace; background: #191919; color: #d4d4d4; }
+            .markdown-body { color: #d4d4d4; }
             .btn {
                 background: transparent !important;
                 border: none !important;
-                color: #00ff00 !important;
+                color: #da7756 !important;
                 font-family: monospace !important;
                 font-size: inherit !important;
                 padding: 0 !important;
                 margin-right: 1em !important;
                 box-shadow: none !important;
             }
-            .btn:hover { color: #00ffaa !important; }
+            .btn:hover { color: #e89b7b !important; }
             .btn:focus { box-shadow: none !important; }
-            input { background: #000; color: #00ff00; border: 1px solid #00ff00; }
+            .form-group, .card, .input-container, .pywebio, .container,
+            .input-group, .modal-content, .card-body, [class*="input"], [class*="card"] {
+                background: #191919 !important;
+                background-color: #191919 !important;
+                border: none !important;
+            }
+            .form-control {
+                min-height: 44px;
+                font-size: 16px !important;
+                background: #2a2a2a !important;
+                color: #d4d4d4 !important;
+                border: 1px solid #444 !important;
+            }
         """
     )
+
+    # Remove autofocus on mobile to prevent keyboard issues
+    put_html('<script>setTimeout(() => document.activeElement?.blur(), 100);</script>')
 
     put_text("ibercaja movements downloader")
     put_text("----------------------------")
