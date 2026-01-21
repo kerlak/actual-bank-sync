@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from pywebio import config, start_server
 from pywebio.input import input as pyi_input
-from pywebio.output import put_button, put_html, put_markdown, put_text
+from pywebio.output import put_buttons, put_html, put_text
 from playwright.sync_api import sync_playwright
 
 from app import run as run_app
@@ -79,7 +79,7 @@ def dynamic_getpass(prompt: str = "") -> str:
         The user-entered password or stored credential.
     """
     if prompt:
-        put_markdown(f"**{prompt.strip()}**")
+        put_text(f"> {prompt.strip()}")
 
     # Determine which credential is being requested
     prompt_lower = prompt.lower()
@@ -111,9 +111,9 @@ def clear_credentials() -> None:
 
 
 def execute_download() -> None:
-    """Execute the download process when user clicks the button."""
-    put_markdown("---")
-    put_markdown("## Execution log")
+    """Execute the download process when user clicks the link."""
+    put_text("---")
+    put_text("execution log:")
 
     old_stdout = sys.stdout
 
@@ -142,25 +142,45 @@ def execute_download() -> None:
 def main() -> None:
     """Main entry point for the PyWebIO application."""
     config(
-        title="Ibercaja Movements Downloader",
-        css_style="footer, .pywebio-footer, [class*='footer'] { display: none !important; }"
+        title="ibercaja",
+        css_style="""
+            footer, .pywebio-footer, [class*='footer'] { display: none !important; }
+            body { font-family: monospace; background: #1a1a1a; color: #00ff00; }
+            .markdown-body { color: #00ff00; }
+            .btn {
+                background: transparent !important;
+                border: none !important;
+                color: #00ff00 !important;
+                font-family: monospace !important;
+                font-size: inherit !important;
+                padding: 0 !important;
+                margin-right: 1em !important;
+                box-shadow: none !important;
+            }
+            .btn:hover { color: #00ffaa !important; }
+            .btn:focus { box-shadow: none !important; }
+            input { background: #000; color: #00ff00; border: 1px solid #00ff00; }
+        """
     )
 
-    put_markdown("# Ibercaja Movements Downloader")
-    put_markdown("Click the button below to start the download process.")
-    put_markdown("The application will request your credentials when needed.")
-    put_markdown("")
+    put_text("ibercaja movements downloader")
+    put_text("----------------------------")
+    put_text("")
 
     # Show credential status
     if credential_store.has_credentials():
-        put_text("[OK] Credentials stored in memory")
+        put_text("[ok] credentials stored")
     else:
-        put_text("[INFO] No credentials stored yet")
+        put_text("[--] no credentials stored")
 
-    put_markdown("")
-
-    put_button("START DOWNLOAD", onclick=execute_download)
-    put_button("CLEAR CREDENTIALS", onclick=clear_credentials)
+    put_text("")
+    put_buttons(
+        [
+            {'label': '[start download]', 'value': 'download'},
+            {'label': '[clear credentials]', 'value': 'clear'}
+        ],
+        onclick=lambda val: execute_download() if val == 'download' else clear_credentials()
+    )
 
 
 if __name__ == "__main__":
