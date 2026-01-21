@@ -65,6 +65,28 @@ def login(page: Page, codigo: str, clave: str) -> None:
     print("[APP] Login completed")
 
 
+def handle_cookies_banner(page: Page) -> None:
+    """Remove or accept cookies banner if present.
+
+    Args:
+        page: Playwright page instance.
+    """
+    print("[APP] Checking for cookies banner...")
+
+    try:
+        # Try to remove cookies banner via JavaScript
+        page.evaluate("""
+            const cookiesBanner = document.querySelector('.container-cookies');
+            if (cookiesBanner) cookiesBanner.remove();
+
+            const cookiesElement = document.querySelector('cookies');
+            if (cookiesElement) cookiesElement.remove();
+        """)
+        print("[APP] Cookies banner removed via JavaScript")
+    except Exception as e:
+        print(f"[APP] Cookies banner handling: {str(e)[:50]}")
+
+
 def handle_modal_overlay(page: Page) -> None:
     """Remove modal overlays that may block interaction.
 
@@ -78,22 +100,30 @@ def handle_modal_overlay(page: Page) -> None:
 
     for attempt in range(MAX_MODAL_REMOVAL_ATTEMPTS):
         try:
-            # Attempt to hide all overlays and modals via JavaScript
+            # Remove all blocking elements via JavaScript
             page.evaluate("""
-                const overlays = document.querySelectorAll('.overlay, ui-modal');
-                overlays.forEach(el => {
-                    if (el.style) el.style.display = 'none';
-                    el.style.pointerEvents = 'none';
+                // Remove cookies banner
+                document.querySelector('.container-cookies')?.remove();
+                document.querySelector('cookies')?.remove();
+
+                // Remove modal overlays
+                document.querySelectorAll('.overlay, ui-modal').forEach(el => el.remove());
+
+                // Remove any remaining overlay by class
+                document.querySelectorAll('[class*="overlay"]').forEach(el => {
+                    if (el.style) {
+                        el.style.display = 'none';
+                        el.style.pointerEvents = 'none';
+                    }
                 });
             """)
 
             overlay = page.locator(".overlay")
             if not overlay.is_visible(timeout=MODAL_CHECK_TIMEOUT_MS):
-                print(f"[APP] Overlay is hidden (attempt {attempt + 1})")
+                print(f"[APP] Overlay cleared (attempt {attempt + 1})")
                 break
             else:
-                print(f"[APP] Overlay still visible, removing via JavaScript (attempt {attempt + 1})...")
-                page.evaluate("document.querySelector('ui-modal')?.remove()")
+                print(f"[APP] Overlay still visible, retrying (attempt {attempt + 1})...")
                 page.wait_for_timeout(MODAL_WAIT_BETWEEN_ATTEMPTS_MS)
         except Exception as e:
             print(f"[APP] Overlay handling done (attempt {attempt + 1}): {str(e)[:50]}")
@@ -112,8 +142,11 @@ def download_movements(page: Page) -> str:
     Raises:
         Exception: If download fails or elements are not found.
     """
-    print("[APP] Clicking table row to select account...")
-    page.locator(".ui-table__row").click()
+    print("[APP] Waiting for table to load...")
+    table_row = page.locator(".ui-table__row").first
+    table_row.wait_for(state="visible", timeout=60000)
+    print("[APP] Table visible, clicking row to select account...")
+    table_row.click()
     print("[APP] Table row clicked")
 
     print("[APP] Looking for download button...")
@@ -208,7 +241,12 @@ def run(playwright: Playwright) -> None:
         # Perform login
         login(page, codigo, clave)
 
-        # Handle any modal overlays
+        # Handle cookies banner and modal overlays
+        handle_cookies_banner(page)
+        handle_modal_overlay(page)
+
+        # Clear any remaining blocking elements before download
+        handle_cookies_banner(page)
         handle_modal_overlay(page)
 
         # Download movements Excel

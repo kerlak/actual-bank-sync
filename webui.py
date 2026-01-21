@@ -76,9 +76,10 @@ credential_store = CredentialStore()
 
 
 def auto_scroll() -> None:
-    """Scroll to the bottom of the page for log visibility."""
+    """Scroll to the bottom of the page and hide footer."""
     put_html("""<script>
     window.scrollTo(0, document.body.scrollHeight);
+    document.querySelectorAll('footer, .pywebio-footer, [class*="footer"]').forEach(el => el.style.display = 'none');
     </script>""")
 
 
@@ -193,10 +194,10 @@ def execute_download() -> None:
 
 def main() -> None:
     """Main entry point for the PyWebIO application."""
-    config(title="Ibercaja Movements Downloader")
-
-    # Hide PyWebIO footer
-    hide_footer()
+    config(
+        title="Ibercaja Movements Downloader",
+        css_style="footer, .pywebio-footer, [class*='footer'] { display: none !important; }"
+    )
 
     put_markdown("# Ibercaja Movements Downloader")
     put_markdown("Click the button below to start the download process.")
