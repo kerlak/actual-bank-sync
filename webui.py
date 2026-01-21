@@ -7,6 +7,13 @@ from playwright.sync_api import sync_playwright
 from app import run as run_app
 
 
+# Variables globales para almacenar credenciales en memoria
+stored_credentials = {
+    "codigo": None,
+    "clave": None
+}
+
+
 class LogCapture(io.StringIO):
     """Captura stdout y lo muestra en tiempo real en PyWebIO"""
     def write(self, message):
@@ -22,7 +29,34 @@ def dynamic_getpass(prompt=""):
     """Reemplaza getpass para solicitar entrada dinámicamente desde la UI"""
     if prompt:
         put_markdown(f"**{prompt.strip()}**")
-    return pyi_input(type='password')
+    
+    # Determinar qué credencial se está pidiendo
+    if "Identification" in prompt or "identificación" in prompt.lower():
+        if stored_credentials["codigo"]:
+            put_text(f"Using stored identification code: {'*' * len(stored_credentials['codigo'])}")
+            return stored_credentials["codigo"]
+        else:
+            codigo = pyi_input(type='password')
+            stored_credentials["codigo"] = codigo
+            return codigo
+    elif "Access" in prompt or "acceso" in prompt.lower():
+        if stored_credentials["clave"]:
+            put_text(f"Using stored access key: {'*' * len(stored_credentials['clave'])}")
+            return stored_credentials["clave"]
+        else:
+            clave = pyi_input(type='password')
+            stored_credentials["clave"] = clave
+            return clave
+    else:
+        return pyi_input(type='password')
+
+
+def clear_credentials():
+    """Limpia las credenciales almacenadas"""
+    global stored_credentials
+    stored_credentials["codigo"] = None
+    stored_credentials["clave"] = None
+    put_text("[SYSTEM] Credentials cleared. Next execution will prompt for new credentials.")
 
 
 def execute_download():
@@ -63,7 +97,16 @@ def main():
     put_markdown("The application will request your credentials when needed.")
     put_markdown("")
     
+    # Mostrar estado de credenciales
+    if stored_credentials["codigo"] and stored_credentials["clave"]:
+        put_text("✓ Credentials stored in memory")
+    else:
+        put_text("⚠ No credentials stored yet")
+    
+    put_markdown("")
+    
     put_button("▶ START DOWNLOAD", onclick=execute_download)
+    put_button("✗ CLEAR CREDENTIALS", onclick=clear_credentials)
 
 
 if __name__ == "__main__":

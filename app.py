@@ -31,6 +31,32 @@ def run(playwright: Playwright) -> None:
     print("[APP] Clicking 'Enter' button...")
     page.get_by_role("button", name=" entrar").click()
     print("[APP] Waiting for page to load...")
+    page.wait_for_load_state("networkidle")
+    print("[APP] Waiting for modal overlay to disappear...")
+    
+    # Intentar esperar a que el modal se oculte
+    try:
+        page.wait_for_selector("ui-modal", state="hidden", timeout=5000)
+        print("[APP] Modal hidden")
+    except:
+        print("[APP] Modal still present, closing it...")
+        # Si aún está presente, clickear en el overlay para cerrarlo
+        try:
+            overlay = page.locator("ui-modal .overlay")
+            if overlay.is_visible():
+                overlay.click()
+                print("[APP] Overlay clicked")
+                page.wait_for_timeout(1000)
+        except:
+            print("[APP] Could not close overlay by clicking")
+            # Última opción: remover el overlay con JavaScript
+            try:
+                page.evaluate("document.querySelector('ui-modal')?.remove()")
+                print("[APP] Modal removed via JavaScript")
+            except:
+                print("[APP] Could not remove modal")
+    
+    print("[APP] Attempting to click table row...")
     page.locator(".ui-table__row").click()
     print("[APP] Table row clicked")
     print("[APP] Looking for download button...")
