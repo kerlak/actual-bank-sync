@@ -15,8 +15,8 @@ RUN pip install --no-cache-dir \
 WORKDIR /app
 
 # Copy application files
-COPY app.py .
 COPY webui.py .
+COPY banks/ banks/
 COPY run.sh .
 COPY requirements.txt .
 

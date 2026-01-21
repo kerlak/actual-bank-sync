@@ -1,4 +1,4 @@
-"""Web UI for Ibercaja movements downloader using PyWebIO."""
+"""Web UI hub for multi-bank movements downloader using PyWebIO."""
 
 import io
 import sys
@@ -10,10 +10,10 @@ from unittest.mock import patch
 
 from pywebio import config, start_server
 from pywebio.input import input as pyi_input
-from pywebio.output import put_buttons, put_html, put_text
+from pywebio.output import put_buttons, put_html, put_text, clear
 from playwright.sync_api import sync_playwright
 
-from app import run as run_app
+from banks import ibercaja, ing
 
 # Constants
 SERVER_PORT = 2077
@@ -50,44 +50,98 @@ CSS_THEME = """
 """
 
 
+class Bank(Enum):
+    """Available banks."""
+    IBERCAJA = auto()
+    ING = auto()
+
+
 class CredentialType(Enum):
-    """Identifies which credential is being requested."""
+    """Credential request types."""
+    # Ibercaja
     CODIGO = auto()
     CLAVE = auto()
+    # ING
+    DNI = auto()
+    DIA = auto()
+    MES = auto()
+    ANO = auto()
+    PIN = auto()
 
 
 @dataclass
-class CredentialStore:
-    """Encapsulates credential storage and request tracking."""
+class AppState:
+    """Global application state."""
+    current_bank: Optional[Bank] = None
+    # Ibercaja credentials
+    ibercaja_codigo: Optional[str] = None
+    ibercaja_clave: Optional[str] = None
+    # ING credentials
+    ing_dni: Optional[str] = None
+    ing_dia: Optional[str] = None
+    ing_mes: Optional[str] = None
+    ing_ano: Optional[str] = None
+    ing_pin: Optional[str] = None
+    # Request tracking
+    _credential_queue: list = field(default_factory=list)
+    _queue_index: int = 0
 
-    codigo: Optional[str] = field(default=None)
-    clave: Optional[str] = field(default=None)
-    _next_request: CredentialType = field(default=CredentialType.CODIGO)
+    def setup_ibercaja_queue(self) -> None:
+        """Setup credential request queue for Ibercaja."""
+        self._credential_queue = [CredentialType.CODIGO, CredentialType.CLAVE]
+        self._queue_index = 0
 
-    def has_credentials(self) -> bool:
-        """Check if both credentials are stored."""
-        return self.codigo is not None and self.clave is not None
+    def setup_ing_queue(self) -> None:
+        """Setup credential request queue for ING."""
+        self._credential_queue = [
+            CredentialType.DNI, CredentialType.DIA,
+            CredentialType.MES, CredentialType.ANO, CredentialType.PIN
+        ]
+        self._queue_index = 0
 
-    def clear(self) -> None:
-        """Clear all stored credentials and reset request order."""
-        self.codigo = None
-        self.clave = None
-        self._next_request = CredentialType.CODIGO
+    def get_next_type(self) -> Optional[CredentialType]:
+        """Get next credential type to request."""
+        if self._queue_index < len(self._credential_queue):
+            return self._credential_queue[self._queue_index]
+        return None
 
-    def get_next_type(self) -> CredentialType:
-        """Get the type of the next credential to be requested."""
-        return self._next_request
+    def advance(self) -> None:
+        """Move to next credential in queue."""
+        self._queue_index += 1
 
-    def advance_request(self) -> None:
-        """Move to the next credential in the request sequence."""
-        if self._next_request == CredentialType.CODIGO:
-            self._next_request = CredentialType.CLAVE
-        else:
-            self._next_request = CredentialType.CODIGO
+    def has_ibercaja_credentials(self) -> bool:
+        """Check if Ibercaja credentials are stored."""
+        return self.ibercaja_codigo is not None and self.ibercaja_clave is not None
+
+    def has_ing_credentials(self) -> bool:
+        """Check if ING credentials are stored."""
+        return all([
+            self.ing_dni, self.ing_dia, self.ing_mes,
+            self.ing_ano, self.ing_pin
+        ])
+
+    def clear_ibercaja(self) -> None:
+        """Clear Ibercaja credentials."""
+        self.ibercaja_codigo = None
+        self.ibercaja_clave = None
+
+    def clear_ing(self) -> None:
+        """Clear ING credentials."""
+        self.ing_dni = None
+        self.ing_dia = None
+        self.ing_mes = None
+        self.ing_ano = None
+        self.ing_pin = None
+
+    def clear_all(self) -> None:
+        """Clear all credentials."""
+        self.clear_ibercaja()
+        self.clear_ing()
+        self.current_bank = None
 
 
-# Global credential store instance
-credential_store = CredentialStore()
+# Global state
+state = AppState()
 
 
 def blur_active_element() -> None:
@@ -112,105 +166,163 @@ class LogCapture(io.StringIO):
     """Captures stdout and displays it in real-time in PyWebIO."""
 
     def write(self, message: str) -> int:
-        """Write message to the UI."""
         if message and message.strip():
             put_text(message.rstrip())
             auto_scroll()
         return len(message)
 
     def flush(self) -> None:
-        """Flush the buffer (no-op for this implementation)."""
         pass
 
 
-def dynamic_getpass(prompt: str = "") -> str:
-    """Replace getpass to request input dynamically from the UI.
-
-    Uses request order tracking instead of parsing prompt text.
-    """
+def dynamic_getpass_ibercaja(prompt: str = "") -> str:
+    """Dynamic getpass for Ibercaja credentials."""
     if prompt:
         put_text(f"> {prompt.strip()}")
 
     blur_active_element()
+    cred_type = state.get_next_type()
 
-    credential_type = credential_store.get_next_type()
+    if cred_type == CredentialType.CODIGO:
+        if state.ibercaja_codigo:
+            put_text(f"Using stored identification code: {'*' * len(state.ibercaja_codigo)}")
+            state.advance()
+            return state.ibercaja_codigo
+        state.ibercaja_codigo = pyi_input(type='password')
+        state.advance()
+        return state.ibercaja_codigo
 
-    if credential_type == CredentialType.CODIGO:
-        if credential_store.codigo:
-            put_text(f"Using stored identification code: {'*' * len(credential_store.codigo)}")
-            credential_store.advance_request()
-            return credential_store.codigo
-        else:
-            credential_store.codigo = pyi_input(type='password')
-            credential_store.advance_request()
-            return credential_store.codigo
+    elif cred_type == CredentialType.CLAVE:
+        if state.ibercaja_clave:
+            put_text(f"Using stored access key: {'*' * len(state.ibercaja_clave)}")
+            state.advance()
+            return state.ibercaja_clave
+        state.ibercaja_clave = pyi_input(type='password')
+        state.advance()
+        return state.ibercaja_clave
 
-    else:  # CredentialType.CLAVE
-        if credential_store.clave:
-            put_text(f"Using stored access key: {'*' * len(credential_store.clave)}")
-            credential_store.advance_request()
-            return credential_store.clave
-        else:
-            credential_store.clave = pyi_input(type='password')
-            credential_store.advance_request()
-            return credential_store.clave
-
-
-def clear_credentials() -> None:
-    """Clear stored credentials and notify user."""
-    credential_store.clear()
-    put_text("[SYSTEM] Credentials cleared. Next execution will prompt for new credentials.")
+    return ""
 
 
-def execute_download() -> None:
-    """Execute the download process when user clicks the link."""
+def dynamic_getpass_ing(prompt: str = "") -> str:
+    """Dynamic getpass for ING credentials."""
+    if prompt:
+        put_text(f"> {prompt.strip()}")
+
+    blur_active_element()
+    cred_type = state.get_next_type()
+
+    if cred_type == CredentialType.DNI:
+        if state.ing_dni:
+            put_text(f"Using stored DNI: {'*' * len(state.ing_dni)}")
+            state.advance()
+            return state.ing_dni
+        state.ing_dni = pyi_input(type='password')
+        state.advance()
+        return state.ing_dni
+
+    elif cred_type == CredentialType.DIA:
+        if state.ing_dia:
+            put_text(f"Using stored day: {state.ing_dia}")
+            state.advance()
+            return state.ing_dia
+        state.ing_dia = pyi_input(type='password')
+        state.advance()
+        return state.ing_dia
+
+    elif cred_type == CredentialType.MES:
+        if state.ing_mes:
+            put_text(f"Using stored month: {state.ing_mes}")
+            state.advance()
+            return state.ing_mes
+        state.ing_mes = pyi_input(type='password')
+        state.advance()
+        return state.ing_mes
+
+    elif cred_type == CredentialType.ANO:
+        if state.ing_ano:
+            put_text(f"Using stored year: {state.ing_ano}")
+            state.advance()
+            return state.ing_ano
+        state.ing_ano = pyi_input(type='password')
+        state.advance()
+        return state.ing_ano
+
+    elif cred_type == CredentialType.PIN:
+        if state.ing_pin:
+            put_text(f"Using stored PIN: {'*' * len(state.ing_pin)}")
+            state.advance()
+            return state.ing_pin
+        put_text("  [ * * * * * * ]")
+        state.ing_pin = pyi_input(type='password')
+        state.advance()
+        return state.ing_pin
+
+    return ""
+
+
+def execute_ibercaja() -> None:
+    """Execute Ibercaja download."""
     put_text("---")
     put_text("execution log:")
 
-    # Reset request order for new download
-    credential_store._next_request = CredentialType.CODIGO
-
+    state.setup_ibercaja_queue()
     old_stdout = sys.stdout
 
     try:
         sys.stdout = LogCapture()
 
-        with patch('getpass.getpass', side_effect=dynamic_getpass):
+        with patch('getpass.getpass', side_effect=dynamic_getpass_ibercaja):
             with sync_playwright() as playwright:
-                print("[WEBUI] Calling run_app...")
-                run_app(playwright)
-                print("[WEBUI] run_app completed")
+                print("[WEBUI] Starting Ibercaja download...")
+                ibercaja.run(playwright)
+                print("[WEBUI] Ibercaja completed")
 
         sys.stdout = old_stdout
-        print("[WEBUI] Process completed successfully")
-        put_text("[PROCESS] Download completed successfully. Files available in ./downloads")
+        put_text("[PROCESS] Download completed. Files in ./downloads/ibercaja")
 
     except Exception as e:
         sys.stdout = old_stdout
-        print(f"[WEBUI] Error: {str(e)}")
-        put_text(f"[ERROR] Error during execution: {str(e)}")
+        put_text(f"[ERROR] {str(e)}")
         put_text(traceback.format_exc())
 
 
-def handle_button_click(action: str) -> None:
-    """Handle button clicks for main actions."""
-    if action == 'download':
-        execute_download()
-    elif action == 'clear':
-        clear_credentials()
+def execute_ing() -> None:
+    """Execute ING download."""
+    put_text("---")
+    put_text("execution log:")
+
+    state.setup_ing_queue()
+    old_stdout = sys.stdout
+
+    try:
+        sys.stdout = LogCapture()
+
+        with patch('getpass.getpass', side_effect=dynamic_getpass_ing):
+            with sync_playwright() as playwright:
+                print("[WEBUI] Starting ING download...")
+                ing.run(playwright)
+                print("[WEBUI] ING completed")
+
+        sys.stdout = old_stdout
+        put_text("[PROCESS] Download completed. Files in ./downloads/ing")
+
+    except Exception as e:
+        sys.stdout = old_stdout
+        put_text(f"[ERROR] {str(e)}")
+        put_text(traceback.format_exc())
 
 
-def main() -> None:
-    """Main entry point for the PyWebIO application."""
-    config(title="ibercaja", css_style=CSS_THEME)
+def show_ibercaja() -> None:
+    """Show Ibercaja interface."""
+    state.current_bank = Bank.IBERCAJA
+    clear()
 
-    blur_active_element()
-
-    put_text("ibercaja movements downloader")
-    put_text("----------------------------")
+    put_text("ibercaja")
+    put_text("--------")
     put_text("")
 
-    if credential_store.has_credentials():
+    if state.has_ibercaja_credentials():
         put_text("[ok] credentials stored")
     else:
         put_text("[--] no credentials stored")
@@ -219,10 +331,93 @@ def main() -> None:
     put_buttons(
         [
             {'label': '[start download]', 'value': 'download'},
-            {'label': '[clear credentials]', 'value': 'clear'}
+            {'label': '[clear credentials]', 'value': 'clear'},
+            {'label': '[back]', 'value': 'back'}
         ],
-        onclick=handle_button_click
+        onclick=handle_ibercaja_action
     )
+
+
+def show_ing() -> None:
+    """Show ING interface."""
+    state.current_bank = Bank.ING
+    clear()
+
+    put_text("ing")
+    put_text("---")
+    put_text("")
+
+    if state.has_ing_credentials():
+        put_text("[ok] credentials stored")
+    else:
+        put_text("[--] no credentials stored")
+
+    put_text("")
+    put_buttons(
+        [
+            {'label': '[start download]', 'value': 'download'},
+            {'label': '[clear credentials]', 'value': 'clear'},
+            {'label': '[back]', 'value': 'back'}
+        ],
+        onclick=handle_ing_action
+    )
+
+
+def handle_ibercaja_action(action: str) -> None:
+    """Handle Ibercaja actions."""
+    if action == 'download':
+        execute_ibercaja()
+    elif action == 'clear':
+        state.clear_ibercaja()
+        put_text("[SYSTEM] Ibercaja credentials cleared")
+    elif action == 'back':
+        show_menu()
+
+
+def handle_ing_action(action: str) -> None:
+    """Handle ING actions."""
+    if action == 'download':
+        execute_ing()
+    elif action == 'clear':
+        state.clear_ing()
+        put_text("[SYSTEM] ING credentials cleared")
+    elif action == 'back':
+        show_menu()
+
+
+def handle_menu_selection(bank: str) -> None:
+    """Handle bank selection from main menu."""
+    if bank == 'ibercaja':
+        show_ibercaja()
+    elif bank == 'ing':
+        show_ing()
+
+
+def show_menu() -> None:
+    """Show main menu."""
+    state.current_bank = None
+    clear()
+
+    blur_active_element()
+
+    put_text("banking hub")
+    put_text("-----------")
+    put_text("")
+    put_text("select bank:")
+    put_text("")
+    put_buttons(
+        [
+            {'label': '[ibercaja]', 'value': 'ibercaja'},
+            {'label': '[ing]', 'value': 'ing'}
+        ],
+        onclick=handle_menu_selection
+    )
+
+
+def main() -> None:
+    """Main entry point for the PyWebIO application."""
+    config(title="banking hub", css_style=CSS_THEME)
+    show_menu()
 
 
 if __name__ == "__main__":
