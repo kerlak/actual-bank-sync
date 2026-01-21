@@ -1,13 +1,12 @@
-# USAMOS LA IMAGEN OFICIAL
+# Base image: Official Playwright Python image
 FROM mcr.microsoft.com/playwright/python:v1.56.0-jammy
 
-# 1. Instalamos Xvfb
+# Install Xvfb for virtual display
 RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. INSTALAMOS LIBRERÍAS (FORZAMOS LA INSTALACIÓN AQUÍ)
-# Añadimos playwright y stealth explícitamente para asegurar que Python las ve
+# Install Python dependencies (playwright and stealth explicitly for visibility)
 RUN pip install --no-cache-dir \
     pywebio \
     playwright==1.56.0 \
@@ -15,7 +14,7 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
-# 3. Copiamos archivos
+# Copy application files
 COPY app.py .
 COPY webui.py .
 COPY run.sh .
@@ -23,14 +22,14 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 4. Permisos de ejecución
+# Set execution permissions
 RUN chmod +x run.sh
 
-# Variables
+# Environment variables
 ENV PYTHONUNBUFFERED=1
 ENV TERM=xterm-256color
 
 EXPOSE 2077
 
-# 5. Arrancamos con tu script manual
+# Start application via run script
 CMD ["./run.sh"]
