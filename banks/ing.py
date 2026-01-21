@@ -6,11 +6,13 @@ import re
 import time
 from typing import Optional
 
+import pandas as pd
 from playwright.sync_api import Playwright, Page, Browser, BrowserContext
 
 # Constants
 ING_URL = "https://ing.ingdirect.es/app-login/"
 DOWNLOADS_FOLDER = "./downloads/ing"
+EXCEL_HEADER_ROW = 0  # ING Excel files have header in first row
 
 
 def get_credentials() -> dict:
@@ -55,6 +57,20 @@ def debug_element_exists(page: Page, selector: str, description: str) -> bool:
     except Exception as e:
         print(f"[DEBUG] {description}: error={str(e)[:30]}")
         return False
+
+
+def convert_excel_to_csv(excel_path: str) -> str:
+    """Convert downloaded Excel file to CSV format."""
+    csv_path = excel_path.replace('.xlsx', '.csv')
+    print(f"[ING] Converting {os.path.basename(excel_path)} to CSV...")
+
+    df = pd.read_excel(excel_path, header=EXCEL_HEADER_ROW, engine='openpyxl')
+    print(f"[ING] Data loaded: {len(df)} rows")
+
+    df.to_csv(csv_path, index=False)
+    print(f"[ING] CSV saved: {csv_path}")
+
+    return csv_path
 
 
 def cleanup(context: Optional[BrowserContext], browser: Optional[Browser]) -> None:
@@ -339,6 +355,9 @@ def run(playwright: Playwright) -> None:
                     download.save_as(file_path)
                     downloaded_files.append(file_path)
                     print(f"[ING] Downloaded: {file_path}")
+
+                    # Convert to CSV
+                    convert_excel_to_csv(file_path)
                 else:
                     print(f"[ING] Account {acc} not found, skipping")
                     # Debug: list all links (more verbose)
