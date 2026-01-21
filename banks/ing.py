@@ -142,18 +142,26 @@ def run(playwright: Playwright) -> None:
         page.goto(ING_URL)
         debug_page_state(page, "after_goto")
 
-        # Try to reject cookies
+        # Handle cookie consent banner
         print("[ING] Checking for cookie banner...")
         try:
+            # Wait a moment for cookie banner to appear
+            time.sleep(2)
             reject_btn = page.get_by_role("button", name="Rechazar")
-            if reject_btn.is_visible(timeout=3000):
+            if reject_btn.is_visible(timeout=5000):
                 print("[ING] Cookie banner found, clicking Rechazar...")
                 reject_btn.click()
                 print("[ING] Cookies rejected")
-                time.sleep(0.5)
-                debug_page_state(page, "after_cookies")
+                time.sleep(1)
             else:
-                print("[ING] Rechazar button not visible")
+                # Try Aceptar if Rechazar not found
+                accept_btn = page.get_by_role("button", name="Aceptar")
+                if accept_btn.is_visible(timeout=2000):
+                    print("[ING] Clicking Aceptar cookies...")
+                    accept_btn.click()
+                    time.sleep(1)
+                else:
+                    print("[ING] No cookie banner visible")
         except Exception as e:
             print(f"[ING] Cookie handling: {str(e)[:40]}")
 
@@ -176,8 +184,17 @@ def run(playwright: Playwright) -> None:
         # Fill credentials
         print("[ING] Filling credentials...")
 
-        print("[ING] Filling DNI...")
+        # Wait for login form to be ready
+        print("[ING] Waiting for login form...")
         dni_field = page.get_by_role("textbox", name="Número de documento DNI o")
+        try:
+            dni_field.wait_for(state="visible", timeout=10000)
+        except:
+            # Try alternative selector
+            print("[ING] DNI field not found by role, trying alternative...")
+            dni_field = page.locator('input[name*="dni"], input[id*="dni"], input[placeholder*="DNI"]').first
+
+        print("[ING] Filling DNI...")
         print(f"[DEBUG] DNI field visible: {dni_field.is_visible()}")
         dni_field.fill(credentials['dni'])
 
@@ -193,34 +210,97 @@ def run(playwright: Playwright) -> None:
         print("[ING] Credentials filled")
         debug_page_state(page, "after_fill")
 
-        # Check continue button state
-        continue_btn = page.get_by_role("button", name="Continuas al siguiente paso")
-        print(f"[DEBUG] Continue button visible: {continue_btn.is_visible()}")
-        print(f"[DEBUG] Continue button enabled: {continue_btn.is_enabled()}")
-
-        # Remove any Didomi overlay that appeared after filling credentials
-        print("[ING] Checking for Didomi overlay before click...")
-        debug_element_exists(page, "#didomi-host", "Didomi host before click")
+        # Remove any overlays that might block interaction
+        print("[ING] Removing any blocking overlays...")
         page.evaluate("""
-            const didomi = document.querySelector('#didomi-host');
-            if (didomi) {
-                didomi.remove();
-                console.log('Didomi removed before click');
-            }
-            // Also remove any overlays
-            document.querySelectorAll('.ing-popup-banner-body, .ing-popup-banner, [class*="popup"]').forEach(el => el.remove());
+            document.querySelector('#didomi-host')?.remove();
+            document.querySelectorAll('.ing-popup-banner-body, .ing-popup-banner, [class*="popup"], [class*="overlay"]').forEach(el => el.remove());
+            document.querySelectorAll('[class*="backdrop"], [class*="modal"]').forEach(el => el.remove());
         """)
-        time.sleep(0.5)
-        debug_element_exists(page, "#didomi-host", "Didomi host after JS removal")
 
-        # Click continue
-        print("[ING] Clicking continue button...")
-        continue_btn.click()
-        print("[ING] Continue button clicked")
+        # Wait for any animations to settle
+        time.sleep(1)
 
-        # Wait a moment and check state
-        time.sleep(2)
+        # Debug: Check for iframes
+        iframes = page.frames
+        print(f"[DEBUG] Found {len(iframes)} frames on page")
+        for i, frame in enumerate(iframes):
+            print(f"[DEBUG]   Frame {i}: {frame.url[:60] if frame.url else 'about:blank'}")
+
+        # Try to find the continue button in all frames
+        print("[ING] Looking for continue button...")
+        continue_btn = None
+        target_frame = page
+
+        for frame in iframes:
+            try:
+                # Look for various button texts ING might use
+                btn = frame.get_by_role("button", name=re.compile(r"Entrar|Continu|Siguiente|Acceder", re.IGNORECASE))
+                if btn.count() > 0:
+                    continue_btn = btn.first
+                    target_frame = frame
+                    print(f"[DEBUG] Found button '{btn.first.text_content()[:20]}' in frame")
+                    break
+            except:
+                continue
+
+        if continue_btn is None:
+            # Try finding any submit-like button
+            for frame in iframes:
+                try:
+                    btn = frame.locator('button.c-button--primary, button[type="submit"], .c-button--full-width').first
+                    if btn.is_visible():
+                        continue_btn = btn
+                        target_frame = frame
+                        print("[DEBUG] Found button via CSS selector")
+                        break
+                except:
+                    continue
+
+        print(f"[DEBUG] Continue button found: {continue_btn is not None}")
+
+        if continue_btn:
+            print("[ING] Clicking continue button...")
+            try:
+                # Use force=True to bypass actionability checks (overlays, etc)
+                continue_btn.click(timeout=10000, force=True)
+            except Exception as click_error:
+                print(f"[ING] Force click failed: {str(click_error)[:50]}")
+                # Fallback: JavaScript click in the target frame
+                target_frame.evaluate("""
+                    const buttons = document.querySelectorAll('button');
+                    for (const btn of buttons) {
+                        const text = btn.textContent || '';
+                        if (text.includes('Entrar') || text.includes('Continu') || text.includes('Siguiente')) {
+                            console.log('Clicking button:', text);
+                            btn.click();
+                            break;
+                        }
+                    }
+                """)
+        else:
+            # Last resort: try clicking by coordinates or pressing Enter
+            print("[ING] Button not found, trying Enter key...")
+            page.keyboard.press("Enter")
+
+        print("[ING] Continue action executed")
+
+        # Wait for navigation or PIN challenge
+        time.sleep(3)
+
+        # Check state after click
         debug_page_state(page, "after_continue_click")
+
+        # Check for any error messages
+        error_elements = page.locator('[class*="error"], [class*="alert"], [role="alert"]')
+        if error_elements.count() > 0:
+            for i in range(min(error_elements.count(), 3)):
+                try:
+                    text = error_elements.nth(i).text_content()
+                    if text and text.strip():
+                        print(f"[DEBUG] Error/Alert found: {text[:100]}")
+                except:
+                    pass
 
         # Wait for PIN challenge
         print("[ING] Waiting for PIN challenge...")

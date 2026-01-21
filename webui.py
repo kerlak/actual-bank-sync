@@ -209,8 +209,15 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
     if prompt.startswith("PIN_DIGITS:"):
         positions_str = prompt.replace("PIN_DIGITS:", "").rstrip(":")
         positions = [int(p) for p in positions_str.split(",")]
-        put_text(f"> Enter PIN digits for positions: {positions}")
-        put_text(f"  [ {' '.join(f'{p}ª' for p in positions)} ]")
+
+        # Visual representation: _ for requested positions, · for others
+        pin_visual = ''.join('_' if i in positions else '·' for i in range(1, 7))
+        pos_labels = ''.join(str(i) if i in positions else ' ' for i in range(1, 7))
+
+        put_text("> Enter PIN digits:")
+        put_text(f"  PIN:  [ {' '.join(pin_visual)} ]")
+        put_text(f"          {' '.join(pos_labels)}")
+
         blur_active_element()
         pin_digits = pyi_input(type='password')
         return pin_digits
