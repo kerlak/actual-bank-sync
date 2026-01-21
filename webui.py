@@ -84,6 +84,13 @@ def dynamic_getpass(prompt: str = "") -> str:
     # Determine which credential is being requested
     prompt_lower = prompt.lower()
 
+    # Remove autofocus from inputs on iOS - user must tap to get keyboard
+    put_html('''<script>
+        setTimeout(() => {
+            document.querySelectorAll('input').forEach(i => i.blur());
+        }, 100);
+    </script>''')
+
     if "identification" in prompt_lower or "identificacion" in prompt_lower:
         if credential_store.codigo:
             put_text(f"Using stored identification code: {'*' * len(credential_store.codigo)}")
