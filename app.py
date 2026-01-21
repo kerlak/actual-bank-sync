@@ -34,27 +34,30 @@ def run(playwright: Playwright) -> None:
     page.wait_for_load_state("networkidle")
     print("[APP] Waiting for modal overlay to disappear...")
     
-    # Intentar esperar a que el modal se oculte
-    try:
-        page.wait_for_selector("ui-modal", state="hidden", timeout=5000)
-        print("[APP] Modal hidden")
-    except:
-        print("[APP] Modal still present, closing it...")
-        # Si aún está presente, clickear en el overlay para cerrarlo
+    # Esperar a que el overlay sea invisible o removerlo con JavaScript
+    max_attempts = 5
+    for attempt in range(max_attempts):
         try:
-            overlay = page.locator("ui-modal .overlay")
-            if overlay.is_visible():
-                overlay.click()
-                print("[APP] Overlay clicked")
-                page.wait_for_timeout(1000)
-        except:
-            print("[APP] Could not close overlay by clicking")
-            # Última opción: remover el overlay con JavaScript
-            try:
+            # Intentar remover todos los overlays y modales con JavaScript
+            page.evaluate("""
+                const overlays = document.querySelectorAll('.overlay, ui-modal');
+                overlays.forEach(el => {
+                    if (el.style) el.style.display = 'none';
+                    el.style.pointerEvents = 'none';
+                });
+            """)
+            
+            overlay = page.locator(".overlay")
+            if not overlay.is_visible(timeout=500):
+                print(f"[APP] Overlay is hidden (attempt {attempt + 1})")
+                break
+            else:
+                print(f"[APP] Overlay still visible, removing via JavaScript (attempt {attempt + 1})...")
                 page.evaluate("document.querySelector('ui-modal')?.remove()")
-                print("[APP] Modal removed via JavaScript")
-            except:
-                print("[APP] Could not remove modal")
+                page.wait_for_timeout(300)
+        except Exception as e:
+            print(f"[APP] Overlay handling done (attempt {attempt + 1}): {str(e)[:50]}")
+            break
     
     print("[APP] Attempting to click table row...")
     page.locator(".ui-table__row").click()
