@@ -2,7 +2,7 @@ import sys
 import io
 from unittest.mock import patch
 from pywebio.input import input as pyi_input
-from pywebio.output import put_markdown, put_text, put_button
+from pywebio.output import put_markdown, put_text, put_button, put_html
 from playwright.sync_api import sync_playwright
 from app import run as run_app
 
@@ -14,11 +14,17 @@ stored_credentials = {
 }
 
 
+def auto_scroll():
+    """Hace scroll automático al final de la página"""
+    put_html("<script>window.scrollTo(0, document.body.scrollHeight);</script>")
+
+
 class LogCapture(io.StringIO):
     """Captura stdout y lo muestra en tiempo real en PyWebIO"""
     def write(self, message):
         if message and message.strip():
             put_text(message.rstrip())
+            auto_scroll()
         return len(message)
     
     def flush(self):
