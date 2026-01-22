@@ -432,6 +432,39 @@ def execute_sync_ing(account_type: str) -> None:
         put_text(f"[ERROR] {result.message}")
 
 
+def execute_upload_ibercaja() -> None:
+    """Upload an Ibercaja Excel file and convert to CSV."""
+    put_text("---")
+    put_text("upload excel (ibercaja):")
+
+    content = file_upload(
+        label="Select Ibercaja Excel file (.xlsx)",
+        accept=".xlsx"
+    )
+
+    if not content:
+        put_text("[ERROR] No file selected")
+        return
+
+    downloads_dir = './downloads/ibercaja'
+    os.makedirs(downloads_dir, exist_ok=True)
+
+    # Save uploaded file
+    xlsx_path = os.path.join(downloads_dir, 'ibercaja_movements.xlsx')
+    with open(xlsx_path, 'wb') as f:
+        f.write(content['content'])
+    put_text(f"[UPLOAD] Saved: {xlsx_path}")
+
+    # Convert to CSV
+    try:
+        csv_path = ibercaja.convert_excel_to_csv(xlsx_path)
+        os.remove(xlsx_path)
+        put_text(f"[OK] Converted to: {csv_path}")
+        put_text(f"[OK] Ready to sync to Actual Budget")
+    except Exception as e:
+        put_text(f"[ERROR] Conversion failed: {e}")
+
+
 def show_ibercaja() -> None:
     """Show Ibercaja interface."""
     state.current_bank = Bank.IBERCAJA
@@ -451,6 +484,7 @@ def show_ibercaja() -> None:
     put_buttons(
         [
             {'label': '[start download]', 'value': 'download'},
+            {'label': '[upload xlsx]', 'value': 'upload'},
             {'label': '[sync to actual]', 'value': 'sync'},
             {'label': '[clear credentials]', 'value': 'clear'},
             {'label': '[back]', 'value': 'back'}
@@ -526,6 +560,8 @@ def handle_ibercaja_action(action: str) -> None:
     """Handle Ibercaja actions."""
     if action == 'download':
         execute_ibercaja()
+    elif action == 'upload':
+        execute_upload_ibercaja()
     elif action == 'sync':
         execute_sync_ibercaja()
     elif action == 'clear':
