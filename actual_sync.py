@@ -176,15 +176,18 @@ def sync_csv_to_actual(
                         payee=payee_name,
                         notes=notes,
                         amount=amount,
-                        imported_id=imported_id
+                        imported_id=imported_id,
+                        cleared=True  # Bank transactions are verified
                     )
                     imported += 1
 
                 except Exception as e:
                     errors.append(f"Row {row.get('Nº Orden', '?')}: {str(e)[:50]}")
 
-            # Commit changes
+            # Apply categorization rules and commit changes
             if imported > 0:
+                print(f"[ACTUAL] Running categorization rules...")
+                actual.run_rules()
                 actual.commit()
                 print(f"[ACTUAL] Committed {imported} transactions")
 
