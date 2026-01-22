@@ -16,7 +16,9 @@ WORKDIR /app
 
 # Copy application files
 COPY webui.py .
+COPY actual_sync.py .
 COPY banks/ banks/
+COPY certs/ certs/
 COPY run.sh .
 COPY requirements.txt .
 

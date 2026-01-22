@@ -14,9 +14,13 @@ from pywebio.output import put_buttons, put_html, put_text, clear
 from playwright.sync_api import sync_playwright
 
 from banks import ibercaja, ing
+import actual_sync
 
 # Constants
 SERVER_PORT = 2077
+ACTUAL_BUDGET_URL = "https://money.home"
+ACTUAL_BUDGET_FILE = "14fe27aa-416b-4c8a-ad9e-4e3dc4330589"  # Juatri's Finances
+ACTUAL_CERT_PATH = "./certs/money.home.pem"  # Self-signed certificate (PEM format)
 
 CSS_THEME = """
     footer, .pywebio-footer, [class*='footer'] { display: none !important; }
@@ -81,6 +85,15 @@ class AppState:
     ing_dia: Optional[str] = None
     ing_mes: Optional[str] = None
     ing_ano: Optional[str] = None
+    # Actual Budget credentials
+    actual_password: Optional[str] = None
+    actual_encryption_password: Optional[str] = None
+    # Account mapping for Actual Budget
+    account_mapping: dict = field(default_factory=lambda: {
+        'ibercaja': 'Ibercaja común',
+        'ing_nomina': 'ING Nómina',
+        'ing_naranja': 'ING Naranja',
+    })
     # Request tracking
     _credential_queue: list = field(default_factory=list)
     _queue_index: int = 0
@@ -116,6 +129,15 @@ class AppState:
         """Check if ING credentials are stored (PIN not stored for security)."""
         return all([self.ing_dni, self.ing_dia, self.ing_mes, self.ing_ano])
 
+    def has_actual_credentials(self) -> bool:
+        """Check if Actual Budget credentials are stored."""
+        return self.actual_password is not None
+
+    def clear_actual(self) -> None:
+        """Clear Actual Budget credentials."""
+        self.actual_password = None
+        self.actual_encryption_password = None
+
     def clear_ibercaja(self) -> None:
         """Clear Ibercaja credentials."""
         self.ibercaja_codigo = None
@@ -132,6 +154,7 @@ class AppState:
         """Clear all credentials."""
         self.clear_ibercaja()
         self.clear_ing()
+        self.clear_actual()
         self.current_bank = None
 
 
@@ -320,6 +343,95 @@ def execute_ing() -> None:
         put_text(traceback.format_exc())
 
 
+def request_actual_credentials() -> bool:
+    """Request Actual Budget credentials if not stored."""
+    if not state.has_actual_credentials():
+        put_text("> Actual Budget server password:")
+        state.actual_password = pyi_input(type='password')
+        if not state.actual_password:
+            put_text("[ERROR] Password is required")
+            return False
+
+        put_text("> Actual Budget file encryption key (leave empty if none):")
+        encryption = pyi_input(type='password')
+        state.actual_encryption_password = encryption if encryption else None
+
+    return True
+
+
+def execute_sync_ibercaja() -> None:
+    """Sync Ibercaja CSV to Actual Budget."""
+    put_text("---")
+    put_text("sync to actual budget:")
+
+    if not request_actual_credentials():
+        return
+
+    csv_path = actual_sync.get_latest_csv('ibercaja')
+    if not csv_path:
+        put_text("[ERROR] No CSV found. Download movements first.")
+        return
+
+    put_text(f"[SYNC] CSV: {csv_path}")
+    put_text(f"[SYNC] Target account: {state.account_mapping['ibercaja']}")
+
+    result = actual_sync.sync_csv_to_actual(
+        csv_path=csv_path,
+        source='ibercaja',
+        base_url=ACTUAL_BUDGET_URL,
+        password=state.actual_password,
+        encryption_password=state.actual_encryption_password,
+        file_name=ACTUAL_BUDGET_FILE,
+        account_mapping=state.account_mapping,
+        cert_path=ACTUAL_CERT_PATH
+    )
+
+    if result.success:
+        put_text(f"[OK] {result.message}")
+        if result.errors:
+            for err in result.errors[:5]:
+                put_text(f"[WARN] {err}")
+    else:
+        put_text(f"[ERROR] {result.message}")
+
+
+def execute_sync_ing(account_type: str) -> None:
+    """Sync ING CSV to Actual Budget."""
+    put_text("---")
+    put_text(f"sync to actual budget ({account_type}):")
+
+    if not request_actual_credentials():
+        return
+
+    source = f'ing_{account_type}'
+    csv_path = actual_sync.get_latest_csv(source)
+    if not csv_path:
+        put_text(f"[ERROR] No CSV found for {account_type}. Download movements first.")
+        return
+
+    put_text(f"[SYNC] CSV: {csv_path}")
+    put_text(f"[SYNC] Target account: {state.account_mapping[source]}")
+
+    result = actual_sync.sync_csv_to_actual(
+        csv_path=csv_path,
+        source=source,
+        base_url=ACTUAL_BUDGET_URL,
+        password=state.actual_password,
+        encryption_password=state.actual_encryption_password,
+        file_name=ACTUAL_BUDGET_FILE,
+        account_mapping=state.account_mapping,
+        cert_path=ACTUAL_CERT_PATH
+    )
+
+    if result.success:
+        put_text(f"[OK] {result.message}")
+        if result.errors:
+            for err in result.errors[:5]:
+                put_text(f"[WARN] {err}")
+    else:
+        put_text(f"[ERROR] {result.message}")
+
+
 def show_ibercaja() -> None:
     """Show Ibercaja interface."""
     state.current_bank = Bank.IBERCAJA
@@ -339,6 +451,7 @@ def show_ibercaja() -> None:
     put_buttons(
         [
             {'label': '[start download]', 'value': 'download'},
+            {'label': '[sync to actual]', 'value': 'sync'},
             {'label': '[clear credentials]', 'value': 'clear'},
             {'label': '[back]', 'value': 'back'}
         ],
@@ -365,6 +478,8 @@ def show_ing() -> None:
     put_buttons(
         [
             {'label': '[start download]', 'value': 'download'},
+            {'label': '[sync nómina]', 'value': 'sync_nomina'},
+            {'label': '[sync naranja]', 'value': 'sync_naranja'},
             {'label': '[clear credentials]', 'value': 'clear'},
             {'label': '[back]', 'value': 'back'}
         ],
@@ -376,6 +491,8 @@ def handle_ibercaja_action(action: str) -> None:
     """Handle Ibercaja actions."""
     if action == 'download':
         execute_ibercaja()
+    elif action == 'sync':
+        execute_sync_ibercaja()
     elif action == 'clear':
         state.clear_ibercaja()
         put_text("[SYSTEM] Ibercaja credentials cleared")
@@ -387,6 +504,10 @@ def handle_ing_action(action: str) -> None:
     """Handle ING actions."""
     if action == 'download':
         execute_ing()
+    elif action == 'sync_nomina':
+        execute_sync_ing('nomina')
+    elif action == 'sync_naranja':
+        execute_sync_ing('naranja')
     elif action == 'clear':
         state.clear_ing()
         put_text("[SYSTEM] ING credentials cleared")

@@ -1,3 +1,4 @@
 .aider*
 downloads/
-downloads/*banks/__pycache__/
+__pycache__/
+certs/
