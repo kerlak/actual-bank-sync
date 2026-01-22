@@ -9,7 +9,7 @@ from typing import Optional
 from unittest.mock import patch
 
 from pywebio import config, start_server
-from pywebio.input import input as pyi_input
+from pywebio.input import file_upload, input as pyi_input
 from pywebio.output import put_buttons, put_html, put_text, clear
 from playwright.sync_api import sync_playwright
 
@@ -459,6 +459,39 @@ def show_ibercaja() -> None:
     )
 
 
+def execute_upload_ing(account_type: str) -> None:
+    """Upload an ING Excel file and convert to CSV."""
+    put_text("---")
+    put_text(f"upload excel ({account_type}):")
+
+    content = file_upload(
+        label=f"Select ING {account_type} Excel file (.xls/.xlsx)",
+        accept=".xls,.xlsx"
+    )
+
+    if not content:
+        put_text("[ERROR] No file selected")
+        return
+
+    downloads_dir = './downloads/ing'
+    os.makedirs(downloads_dir, exist_ok=True)
+
+    # Save uploaded file temporarily
+    xlsx_path = os.path.join(downloads_dir, f"ing_{account_type}.xlsx")
+    with open(xlsx_path, 'wb') as f:
+        f.write(content['content'])
+    put_text(f"[UPLOAD] Saved: {xlsx_path}")
+
+    # Convert to CSV
+    try:
+        csv_path = ing.convert_excel_to_csv(xlsx_path)
+        os.remove(xlsx_path)
+        put_text(f"[OK] Converted to: {csv_path}")
+        put_text(f"[OK] Ready to sync to Actual Budget")
+    except Exception as e:
+        put_text(f"[ERROR] Conversion failed: {e}")
+
+
 def show_ing() -> None:
     """Show ING interface."""
     state.current_bank = Bank.ING
@@ -478,6 +511,8 @@ def show_ing() -> None:
     put_buttons(
         [
             {'label': '[start download]', 'value': 'download'},
+            {'label': '[upload nómina xlsx]', 'value': 'upload_nomina'},
+            {'label': '[upload naranja xlsx]', 'value': 'upload_naranja'},
             {'label': '[sync nómina]', 'value': 'sync_nomina'},
             {'label': '[sync naranja]', 'value': 'sync_naranja'},
             {'label': '[clear credentials]', 'value': 'clear'},
@@ -505,6 +540,10 @@ def handle_ing_action(action: str) -> None:
     """Handle ING actions."""
     if action == 'download':
         execute_ing()
+    elif action == 'upload_nomina':
+        execute_upload_ing('nomina')
+    elif action == 'upload_naranja':
+        execute_upload_ing('naranja')
     elif action == 'sync_nomina':
         execute_sync_ing('nomina')
     elif action == 'sync_naranja':
