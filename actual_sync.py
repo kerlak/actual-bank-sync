@@ -9,7 +9,7 @@ from typing import Optional
 
 import pandas as pd
 from actual import Actual
-from actual.queries import create_transaction, get_accounts, get_transactions
+from actual.queries import create_transaction, get_accounts, get_ruleset, get_transactions
 
 
 # Account mapping: bank CSV source -> Actual Budget account name
@@ -151,6 +151,7 @@ def sync_csv_to_actual(
             existing_ids = {t.financial_id for t in existing_txs if t.financial_id}
 
             # Import each transaction
+            new_transactions = []
             for _, row in df.iterrows():
                 try:
                     imported_id = generate_imported_id(row.to_dict(), source)
@@ -169,7 +170,7 @@ def sync_csv_to_actual(
                     # Notes from Descripción (e.g., "LM GETAFE MADRID", "Intereses a tu favor")
                     notes = str(row['Descripción']) if pd.notna(row['Descripción']) else None
 
-                    create_transaction(
+                    tx = create_transaction(
                         actual.session,
                         date=tx_date,
                         account=account,
@@ -179,16 +180,29 @@ def sync_csv_to_actual(
                         imported_id=imported_id,
                         cleared=True  # Bank transactions are verified
                     )
+                    new_transactions.append(tx)
                     imported += 1
 
                 except Exception as e:
                     errors.append(f"Row {row.get('Nº Orden', '?')}: {str(e)[:50]}")
 
+            # Apply rules only to new transactions
+            if new_transactions:
+                print(f"[ACTUAL] Applying rules to {len(new_transactions)} new transactions...", flush=True)
+                ruleset = get_ruleset(actual.session)
+                rules_applied = 0
+                for tx in new_transactions:
+                    for rule in ruleset.rules:
+                        if rule.run(tx):
+                            rules_applied += 1
+                            actual.session.add(tx)
+                if rules_applied > 0:
+                    print(f"[ACTUAL] Applied {rules_applied} rule matches", flush=True)
+
             # Commit changes
             actual.commit()
             if imported > 0:
                 print(f"[ACTUAL] Committed {imported} new transactions", flush=True)
-                print("[ACTUAL] Apply rules from Actual Budget UI if needed", flush=True)
             else:
                 print("[ACTUAL] No new transactions to import", flush=True)
 
