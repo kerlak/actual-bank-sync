@@ -186,10 +186,15 @@ def sync_csv_to_actual(
 
             # Apply categorization rules and commit changes
             if imported > 0:
-                print(f"[ACTUAL] Running categorization rules...")
-                actual.run_rules()
+                try:
+                    print("[ACTUAL] Running categorization rules...", flush=True)
+                    actual.run_rules()
+                    print("[ACTUAL] Rules applied successfully", flush=True)
+                except Exception as e:
+                    print(f"[ACTUAL] Warning: Could not run rules: {e}", flush=True)
+
                 actual.commit()
-                print(f"[ACTUAL] Committed {imported} transactions")
+                print(f"[ACTUAL] Committed {imported} transactions", flush=True)
 
         return SyncResult(
             success=True,
