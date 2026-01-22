@@ -222,28 +222,11 @@ def sync_csv_to_actual(
 
 
 def get_latest_csv(bank: str) -> Optional[str]:
-    """Get the path to the latest CSV for a bank."""
-    if bank == 'ibercaja':
-        path = './downloads/ibercaja/ibercaja_movements.csv'
-        return path if os.path.exists(path) else None
-
-    elif bank in ('ing_nomina', 'ing_naranja'):
-        # Find the most recent CSV for this account type
-        downloads_dir = './downloads/ing'
-        if not os.path.exists(downloads_dir):
-            return None
-
-        account_type = 'NÓMINA' if bank == 'ing_nomina' else 'NARANJA'
-        csv_files = [
-            f for f in os.listdir(downloads_dir)
-            if f.endswith('.csv') and account_type in f
-        ]
-
-        if not csv_files:
-            return None
-
-        # Return the most recent one
-        csv_files.sort(reverse=True)
-        return os.path.join(downloads_dir, csv_files[0])
-
-    return None
+    """Get the path to the CSV for a bank."""
+    paths = {
+        'ibercaja': './downloads/ibercaja/ibercaja_movements.csv',
+        'ing_nomina': './downloads/ing/ing_nomina.csv',
+        'ing_naranja': './downloads/ing/ing_naranja.csv',
+    }
+    path = paths.get(bank)
+    return path if path and os.path.exists(path) else None

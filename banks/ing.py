@@ -460,14 +460,18 @@ def run(playwright: Playwright) -> None:
                         page.get_by_text("Descargar Excel").click()
 
                     download = download_info.value
-                    filename = f"ing_{acc}_{int(time.time())}.xlsx"
+                    # Fixed filename per account (overwrites previous)
+                    acc_normalized = acc.lower().replace('ó', 'o')  # NÓMINA -> nomina
+                    filename = f"ing_{acc_normalized}.xlsx"
                     file_path = os.path.join(DOWNLOADS_FOLDER, filename)
                     download.save_as(file_path)
                     downloaded_files.append(file_path)
                     print(f"[ING] Downloaded: {file_path}")
 
-                    # Convert to CSV
-                    convert_excel_to_csv(file_path)
+                    # Convert to CSV and delete xlsx
+                    csv_path = convert_excel_to_csv(file_path)
+                    os.remove(file_path)
+                    print(f"[ING] Deleted: {file_path}")
                 else:
                     print(f"[ING] Account {acc} not found, skipping")
                     # Debug: list all links (more verbose)
