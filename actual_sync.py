@@ -184,17 +184,20 @@ def sync_csv_to_actual(
                 except Exception as e:
                     errors.append(f"Row {row.get('Nº Orden', '?')}: {str(e)[:50]}")
 
-            # Apply categorization rules and commit changes
-            if imported > 0:
-                try:
-                    print("[ACTUAL] Running categorization rules...", flush=True)
-                    actual.run_rules()
-                    print("[ACTUAL] Rules applied successfully", flush=True)
-                except Exception as e:
-                    print(f"[ACTUAL] Warning: Could not run rules: {e}", flush=True)
+            # Apply categorization rules (always, to catch any uncategorized transactions)
+            try:
+                print("[ACTUAL] Running categorization rules...", flush=True)
+                actual.run_rules()
+                print("[ACTUAL] Rules applied successfully", flush=True)
+            except Exception as e:
+                print(f"[ACTUAL] Warning: Could not run rules: {e}", flush=True)
 
-                actual.commit()
-                print(f"[ACTUAL] Committed {imported} transactions", flush=True)
+            # Commit changes (always, rules may have made changes)
+            actual.commit()
+            if imported > 0:
+                print(f"[ACTUAL] Committed {imported} new transactions", flush=True)
+            else:
+                print("[ACTUAL] No new transactions (rules may have updated existing)", flush=True)
 
         return SyncResult(
             success=True,
