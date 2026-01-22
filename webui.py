@@ -495,7 +495,8 @@ def handle_ibercaja_action(action: str) -> None:
         execute_sync_ibercaja()
     elif action == 'clear':
         state.clear_ibercaja()
-        put_text("[SYSTEM] Ibercaja credentials cleared")
+        state.clear_actual()
+        put_text("[SYSTEM] Ibercaja and Actual Budget credentials cleared")
     elif action == 'back':
         show_menu()
 
@@ -510,7 +511,8 @@ def handle_ing_action(action: str) -> None:
         execute_sync_ing('naranja')
     elif action == 'clear':
         state.clear_ing()
-        put_text("[SYSTEM] ING credentials cleared")
+        state.clear_actual()
+        put_text("[SYSTEM] ING and Actual Budget credentials cleared")
     elif action == 'back':
         show_menu()
 
