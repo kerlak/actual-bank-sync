@@ -8,6 +8,7 @@ from typing import Optional
 
 import pandas as pd
 from playwright.sync_api import Playwright, Page, Browser, BrowserContext
+from playwright_stealth import stealth_sync
 
 # Constants
 ING_URL = "https://ing.ingdirect.es/app-login/"
@@ -131,7 +132,8 @@ def run(playwright: Playwright) -> None:
         print("[ING] Context created (1920x1080)")
 
         page = context.new_page()
-        print("[ING] New page created")
+        stealth_sync(page)
+        print("[ING] New page created (stealth applied)")
 
         print("[ING] Requesting credentials...")
         credentials = get_credentials()
