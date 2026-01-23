@@ -1,0 +1,31 @@
+name: "Banking Hub"
+description: "Multi-bank movements downloader with Actual Budget sync (Ibercaja & ING)"
+version: "1.0.0"
+slug: "banking_hub"
+url: "https://github.com/juancar/banking-hub"
+
+arch:
+  - amd64
+
+startup: "application"
+boot: "manual"
+host_network: true
+
+ports:
+  2077/tcp: 2077
+ports_description:
+  2077/tcp: "Web UI"
+
+map:
+  - share:rw
+
+options:
+  actual_budget_host: "money.home"
+  actual_budget_ip: "192.168.1.147"
+
+schema:
+  actual_budget_host: str
+  actual_budget_ip: str
+
+environment:
+  PYTHONUNBUFFERED: "1"
