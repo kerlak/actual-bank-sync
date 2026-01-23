@@ -19,9 +19,9 @@ import actual_sync
 
 # Constants
 SERVER_PORT = 2077
-ACTUAL_BUDGET_URL = "https://money.home"
-ACTUAL_BUDGET_FILE = "14fe27aa-416b-4c8a-ad9e-4e3dc4330589"  # Juatri's Finances
-ACTUAL_CERT_PATH = "./certs/money.home.pem"  # Self-signed certificate (PEM format)
+ACTUAL_BUDGET_URL = os.environ.get("ACTUAL_BUDGET_URL", "https://localhost")
+ACTUAL_BUDGET_FILE = os.environ.get("ACTUAL_BUDGET_FILE", "")
+ACTUAL_CERT_PATH = os.environ.get("ACTUAL_CERT_PATH", "./certs/actual.pem")
 
 CSS_THEME = """
     footer, .pywebio-footer, [class*='footer'] { display: none !important; }

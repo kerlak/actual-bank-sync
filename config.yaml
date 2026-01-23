@@ -17,8 +17,8 @@ ports_description:
   2077/tcp: "Web UI"
 
 options:
-  actual_budget_host: "money.home"
-  actual_budget_ip: "192.168.1.147"
+  actual_budget_host: "actual.local"
+  actual_budget_ip: "192.168.1.100"
 
 schema:
   actual_budget_host: str

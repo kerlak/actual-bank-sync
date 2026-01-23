@@ -7,14 +7,11 @@ if [ -f "$OPTIONS_FILE" ]; then
     ACTUAL_IP=$(python3 -c "import json; print(json.load(open('$OPTIONS_FILE'))['actual_budget_ip'])")
     echo "[INIT] Running as Home Assistant add-on"
     echo "[INIT] Actual Budget: $ACTUAL_HOST -> $ACTUAL_IP"
+    echo "$ACTUAL_IP $ACTUAL_HOST" >> /etc/hosts
 else
-    ACTUAL_HOST="money.home"
-    ACTUAL_IP="192.168.1.147"
     echo "[INIT] Running standalone"
+    echo "[INIT] Set ACTUAL_BUDGET_URL and ACTUAL_BUDGET_FILE env vars"
 fi
-
-# Add local DNS entry for Actual Budget server
-echo "$ACTUAL_IP $ACTUAL_HOST" >> /etc/hosts
 
 export DISPLAY=:99
 rm -f /tmp/.X99-lock
