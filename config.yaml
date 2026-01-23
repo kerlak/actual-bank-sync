@@ -16,9 +16,6 @@ ports:
 ports_description:
   2077/tcp: "Web UI"
 
-map:
-  - share:rw
-
 options:
   actual_budget_host: "money.home"
   actual_budget_ip: "192.168.1.147"

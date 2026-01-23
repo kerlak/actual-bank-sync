@@ -7,11 +7,6 @@ if [ -f "$OPTIONS_FILE" ]; then
     ACTUAL_IP=$(python3 -c "import json; print(json.load(open('$OPTIONS_FILE'))['actual_budget_ip'])")
     echo "[INIT] Running as Home Assistant add-on"
     echo "[INIT] Actual Budget: $ACTUAL_HOST -> $ACTUAL_IP"
-
-    # Use /share for persistent downloads
-    DOWNLOADS_DIR="/share/banking-hub/downloads"
-    mkdir -p "$DOWNLOADS_DIR"
-    ln -sfn "$DOWNLOADS_DIR" /app/downloads
 else
     ACTUAL_HOST="money.home"
     ACTUAL_IP="192.168.1.147"
