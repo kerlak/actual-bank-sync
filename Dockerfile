@@ -18,7 +18,6 @@ WORKDIR /app
 COPY webui.py .
 COPY actual_sync.py .
 COPY banks/ banks/
-COPY certs/ certs/
 COPY run.sh .
 COPY requirements.txt .
 
