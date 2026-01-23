@@ -6,6 +6,7 @@ url: "https://github.com/juancar/banking-hub"
 
 arch:
   - amd64
+  - aarch64
 
 startup: "application"
 boot: "manual"
