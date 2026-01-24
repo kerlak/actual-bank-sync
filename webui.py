@@ -344,8 +344,8 @@ def execute_ing() -> None:
         put_text(traceback.format_exc())
 
 
-def request_actual_credentials() -> bool:
-    """Request Actual Budget credentials if not stored."""
+def request_actual_server_password() -> bool:
+    """Request Actual Budget server password if not stored."""
     if not state.has_actual_credentials():
         put_text("> Actual Budget server password:")
         state.actual_password = pyi_input(type='password')
@@ -353,11 +353,15 @@ def request_actual_credentials() -> bool:
             put_text("[ERROR] Password is required")
             return False
 
-        put_text("> Actual Budget file encryption key (leave empty if none):")
-        encryption = pyi_input(type='password')
-        state.actual_encryption_password = encryption if encryption else None
-
     return True
+
+
+def request_file_encryption_password(file_name: str) -> Optional[str]:
+    """Request encryption password for a specific budget file."""
+    put_text(f"> Encryption key for '{file_name}' (leave empty if none):")
+    blur_active_element()
+    encryption = pyi_input(type='password')
+    return encryption if encryption else None
 
 
 def execute_sync_ibercaja() -> None:
@@ -365,7 +369,8 @@ def execute_sync_ibercaja() -> None:
     put_text("---")
     put_text("sync to actual budget:")
 
-    if not request_actual_credentials():
+    # Request server password only
+    if not request_actual_server_password():
         return
 
     csv_path = actual_sync.get_latest_csv('ibercaja')
@@ -400,13 +405,16 @@ def execute_sync_ibercaja() -> None:
 
     put_text(f"[SYNC] Selected file: {selected_file}")
 
+    # Request encryption password for this specific file
+    file_encryption_password = request_file_encryption_password(selected_file)
+
     # List available accounts in the selected file
     put_text("[SYNC] Fetching available accounts...")
     accounts = actual_sync.list_accounts(
         base_url=ACTUAL_BUDGET_URL,
         password=state.actual_password,
         file_name=selected_file,
-        encryption_password=state.actual_encryption_password
+        encryption_password=file_encryption_password
     )
 
     if not accounts:
@@ -432,7 +440,7 @@ def execute_sync_ibercaja() -> None:
         source='ibercaja',
         base_url=ACTUAL_BUDGET_URL,
         password=state.actual_password,
-        encryption_password=state.actual_encryption_password,
+        encryption_password=file_encryption_password,
         file_name=selected_file,
         account_name=selected_account,
         cert_path=ACTUAL_CERT_PATH
@@ -452,7 +460,8 @@ def execute_sync_ing(account_type: str) -> None:
     put_text("---")
     put_text(f"sync to actual budget ({account_type}):")
 
-    if not request_actual_credentials():
+    # Request server password only
+    if not request_actual_server_password():
         return
 
     source = f'ing_{account_type}'
@@ -488,13 +497,16 @@ def execute_sync_ing(account_type: str) -> None:
 
     put_text(f"[SYNC] Selected file: {selected_file}")
 
+    # Request encryption password for this specific file
+    file_encryption_password = request_file_encryption_password(selected_file)
+
     # List available accounts in the selected file
     put_text("[SYNC] Fetching available accounts...")
     accounts = actual_sync.list_accounts(
         base_url=ACTUAL_BUDGET_URL,
         password=state.actual_password,
         file_name=selected_file,
-        encryption_password=state.actual_encryption_password
+        encryption_password=file_encryption_password
     )
 
     if not accounts:
@@ -520,7 +532,7 @@ def execute_sync_ing(account_type: str) -> None:
         source=source,
         base_url=ACTUAL_BUDGET_URL,
         password=state.actual_password,
-        encryption_password=state.actual_encryption_password,
+        encryption_password=file_encryption_password,
         file_name=selected_file,
         account_name=selected_account,
         cert_path=ACTUAL_CERT_PATH
