@@ -1,14 +1,14 @@
 # Security Policy
 
-## ⚠️ Important Security Considerations
+## Important Security Considerations
 
 ### Credential Storage
 
 **This application stores bank credentials in memory only:**
-- ✅ Bank credentials are **never** written to disk
-- ✅ Credentials are **cleared** on application restart
-- ✅ No persistent credential storage
-- ⚠️ Users must re-enter credentials after each restart
+- Bank credentials are **never** written to disk
+- Credentials are **cleared** on application restart
+- No persistent credential storage
+- Users must re-enter credentials after each restart
 
 **For Actual Budget:**
 - Server password is stored in memory only
@@ -34,7 +34,7 @@
 **SSL/TLS:**
 - Actual Budget connections skip SSL verification (`cert=False`)
 - This is necessary for self-signed certificates
-- ⚠️ Vulnerable to man-in-the-middle attacks on untrusted networks
+- Vulnerable to man-in-the-middle attacks on untrusted networks
 - **Recommendation:** Use trusted network (VPN, local network only)
 
 **Bank Connections:**
@@ -44,16 +44,16 @@
 ### Code Security
 
 **No Hardcoded Secrets:**
-- ✅ No API keys, passwords, or tokens in source code
-- ✅ All sensitive config via environment variables
-- ✅ Sample configs use placeholder values only
+- No API keys, passwords, or tokens in source code
+- All sensitive config via environment variables
+- Sample configs use placeholder values only
 
 **Dependencies:**
 - Uses `actualpy`, `playwright`, `pywebio`, `pandas`
 - **Recommendation:** Run `pip list --outdated` periodically
 - **Recommendation:** Update dependencies for security patches
 
-## 🔒 Best Practices for Users
+## Best Practices for Users
 
 ### Before Running
 
@@ -77,11 +77,11 @@
 4. **Regular backups**: Backup Actual Budget data separately
 5. **Update regularly**: Pull latest version for security fixes
 
-## ⚖️ Legal and Terms of Service Considerations
+## Legal and Terms of Service Considerations
 
 ### Bank Scraping
 
-**⚠️ IMPORTANT DISCLAIMER:**
+**IMPORTANT DISCLAIMER:**
 
 This software automates the download of bank statements from Spanish banks (Ibercaja, ING) using web scraping techniques. **Be aware of the following:**
 
@@ -113,7 +113,7 @@ To avoid automated scraping:
 - Use the `[upload xlsx]` feature in the web UI
 - This approach doesn't violate automation restrictions
 
-## 🐛 Reporting Security Issues
+## Reporting Security Issues
 
 **Do NOT open public GitHub issues for security vulnerabilities.**
 
@@ -123,7 +123,7 @@ Instead:
 3. Provide detailed description of vulnerability
 4. Allow time for fix before public disclosure
 
-## 📋 Security Checklist Before Going Public
+## Security Checklist Before Going Public
 
 ### Repository Audit
 
@@ -154,7 +154,7 @@ Instead:
 - [ ] Include disclaimer of warranty
 - [ ] Include limitation of liability
 
-## 📜 License and Liability
+## License and Liability
 
 **This software is provided for educational and personal use only.**
 
@@ -166,11 +166,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 - Security of their own credentials and data
 - Any consequences of using this software
 
-## 🔄 Version History
+## Version History
 
 - **v1.1.0**: Added per-file encryption, saved mappings, credential management
 - **v1.0.0**: Initial public release
 
-## 📞 Contact
+## Contact
 
 For security concerns, contact the repository maintainer through GitHub.

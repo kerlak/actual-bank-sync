@@ -2,13 +2,13 @@
 
 Multi-bank movements downloader with Actual Budget synchronization for Spanish banks (Ibercaja & ING).
 
-## ⚠️ IMPORTANT DISCLAIMERS
+## IMPORTANT DISCLAIMERS
 
 **LEGAL NOTICE**: This software automates access to banking websites. Be aware:
-- ✋ May violate your bank's Terms of Service
-- ⚖️ You are responsible for compliance with local laws
-- 🔒 Use only with your own accounts
-- 🛡️ No warranty or liability - use at your own risk
+- May violate your bank's Terms of Service
+- You are responsible for compliance with local laws
+- Use only with your own accounts
+- No warranty or liability - use at your own risk
 
 **See [SECURITY.md](SECURITY.md) for complete security policy and legal considerations.**
 
