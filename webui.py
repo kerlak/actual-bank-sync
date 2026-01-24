@@ -10,7 +10,7 @@ from typing import Optional
 from unittest.mock import patch
 
 from pywebio import config, start_server
-from pywebio.input import file_upload, input as pyi_input
+from pywebio.input import file_upload, input as pyi_input, select
 from pywebio.output import put_buttons, put_html, put_text, clear
 from playwright.sync_api import sync_playwright
 
@@ -374,7 +374,58 @@ def execute_sync_ibercaja() -> None:
         return
 
     put_text(f"[SYNC] CSV: {csv_path}")
-    put_text(f"[SYNC] Target account: {state.account_mapping['ibercaja']}")
+
+    # List available budget files
+    put_text("[SYNC] Fetching available budget files...")
+    budget_files = actual_sync.list_budget_files(
+        base_url=ACTUAL_BUDGET_URL,
+        password=state.actual_password
+    )
+
+    if not budget_files:
+        put_text("[ERROR] No budget files found or connection failed")
+        return
+
+    # Let user select budget file
+    put_text("> Select budget file:")
+    blur_active_element()
+    selected_file = select(
+        label="",
+        options=[(f['name'], f['name']) for f in budget_files]
+    )
+
+    if not selected_file:
+        put_text("[ERROR] No file selected")
+        return
+
+    put_text(f"[SYNC] Selected file: {selected_file}")
+
+    # List available accounts in the selected file
+    put_text("[SYNC] Fetching available accounts...")
+    accounts = actual_sync.list_accounts(
+        base_url=ACTUAL_BUDGET_URL,
+        password=state.actual_password,
+        file_name=selected_file,
+        encryption_password=state.actual_encryption_password
+    )
+
+    if not accounts:
+        put_text("[ERROR] No accounts found or connection failed")
+        return
+
+    # Let user select account
+    put_text("> Select target account:")
+    blur_active_element()
+    selected_account = select(
+        label="",
+        options=[(a['name'], a['name']) for a in accounts]
+    )
+
+    if not selected_account:
+        put_text("[ERROR] No account selected")
+        return
+
+    put_text(f"[SYNC] Target account: {selected_account}")
 
     result = actual_sync.sync_csv_to_actual(
         csv_path=csv_path,
@@ -382,8 +433,8 @@ def execute_sync_ibercaja() -> None:
         base_url=ACTUAL_BUDGET_URL,
         password=state.actual_password,
         encryption_password=state.actual_encryption_password,
-        file_name=ACTUAL_BUDGET_FILE,
-        account_mapping=state.account_mapping,
+        file_name=selected_file,
+        account_name=selected_account,
         cert_path=ACTUAL_CERT_PATH
     )
 
@@ -411,7 +462,58 @@ def execute_sync_ing(account_type: str) -> None:
         return
 
     put_text(f"[SYNC] CSV: {csv_path}")
-    put_text(f"[SYNC] Target account: {state.account_mapping[source]}")
+
+    # List available budget files
+    put_text("[SYNC] Fetching available budget files...")
+    budget_files = actual_sync.list_budget_files(
+        base_url=ACTUAL_BUDGET_URL,
+        password=state.actual_password
+    )
+
+    if not budget_files:
+        put_text("[ERROR] No budget files found or connection failed")
+        return
+
+    # Let user select budget file
+    put_text("> Select budget file:")
+    blur_active_element()
+    selected_file = select(
+        label="",
+        options=[(f['name'], f['name']) for f in budget_files]
+    )
+
+    if not selected_file:
+        put_text("[ERROR] No file selected")
+        return
+
+    put_text(f"[SYNC] Selected file: {selected_file}")
+
+    # List available accounts in the selected file
+    put_text("[SYNC] Fetching available accounts...")
+    accounts = actual_sync.list_accounts(
+        base_url=ACTUAL_BUDGET_URL,
+        password=state.actual_password,
+        file_name=selected_file,
+        encryption_password=state.actual_encryption_password
+    )
+
+    if not accounts:
+        put_text("[ERROR] No accounts found or connection failed")
+        return
+
+    # Let user select account
+    put_text("> Select target account:")
+    blur_active_element()
+    selected_account = select(
+        label="",
+        options=[(a['name'], a['name']) for a in accounts]
+    )
+
+    if not selected_account:
+        put_text("[ERROR] No account selected")
+        return
+
+    put_text(f"[SYNC] Target account: {selected_account}")
 
     result = actual_sync.sync_csv_to_actual(
         csv_path=csv_path,
@@ -419,8 +521,8 @@ def execute_sync_ing(account_type: str) -> None:
         base_url=ACTUAL_BUDGET_URL,
         password=state.actual_password,
         encryption_password=state.actual_encryption_password,
-        file_name=ACTUAL_BUDGET_FILE,
-        account_mapping=state.account_mapping,
+        file_name=selected_file,
+        account_name=selected_account,
         cert_path=ACTUAL_CERT_PATH
     )
 
