@@ -444,12 +444,33 @@ def select_file_and_account(source: str) -> tuple[Optional[str], Optional[str], 
         put_text("[ERROR] No budget files found or connection failed")
         return None, None, None
 
+    # Check if ACTUAL_BUDGET_FILE env var is set (Home Assistant compatibility)
+    default_file = None
+    if ACTUAL_BUDGET_FILE:
+        # Try to find a matching file
+        for f in budget_files:
+            if f['name'] == ACTUAL_BUDGET_FILE or f['file_id'] == ACTUAL_BUDGET_FILE:
+                default_file = f['name']
+                put_text(f"[HA CONFIG] Found configured file: {default_file}")
+                break
+
     # Let user select budget file
-    put_text("> Select budget file:")
+    if default_file and len(budget_files) > 1:
+        put_text("> Select budget file (Home Assistant default pre-selected):")
+    else:
+        put_text("> Select budget file:")
+
     blur_active_element()
+
+    # Set default option if found
+    file_options = [(f['name'], f['name']) for f in budget_files]
+    if default_file:
+        # Move default to the top of the list
+        file_options = [(default_file, default_file)] + [(f['name'], f['name']) for f in budget_files if f['name'] != default_file]
+
     selected_file = select(
         label="",
-        options=[(f['name'], f['name']) for f in budget_files]
+        options=file_options
     )
 
     if not selected_file:
@@ -474,12 +495,33 @@ def select_file_and_account(source: str) -> tuple[Optional[str], Optional[str], 
         put_text("[ERROR] No accounts found or connection failed")
         return None, None, None
 
+    # Check if there's a legacy account mapping for this source (Home Assistant compatibility)
+    default_account = state.account_mapping.get(source)
+    matching_account = None
+    if default_account:
+        for acc in accounts:
+            if acc['name'] == default_account:
+                matching_account = default_account
+                put_text(f"[HA CONFIG] Found configured account: {matching_account}")
+                break
+
     # Let user select account
-    put_text("> Select target account:")
+    if matching_account and len(accounts) > 1:
+        put_text("> Select target account (Home Assistant default pre-selected):")
+    else:
+        put_text("> Select target account:")
+
     blur_active_element()
+
+    # Set default option if found
+    account_options = [(a['name'], a['name']) for a in accounts]
+    if matching_account:
+        # Move default to the top of the list
+        account_options = [(matching_account, matching_account)] + [(a['name'], a['name']) for a in accounts if a['name'] != matching_account]
+
     selected_account = select(
         label="",
-        options=[(a['name'], a['name']) for a in accounts]
+        options=account_options
     )
 
     if not selected_account:
