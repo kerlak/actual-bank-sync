@@ -645,8 +645,6 @@ def show_ibercaja() -> None:
             {'label': '[start download]', 'value': 'download'},
             {'label': '[upload xlsx]', 'value': 'upload'},
             {'label': '[sync to actual]', 'value': 'sync'},
-            {'label': '[clear credentials]', 'value': 'clear'},
-            {'label': '[clear mappings]', 'value': 'clear_mappings'},
             {'label': '[back]', 'value': 'back'}
         ],
         onclick=handle_ibercaja_action
@@ -724,8 +722,6 @@ def show_ing() -> None:
             {'label': '[upload naranja xlsx]', 'value': 'upload_naranja'},
             {'label': '[sync nómina]', 'value': 'sync_nomina'},
             {'label': '[sync naranja]', 'value': 'sync_naranja'},
-            {'label': '[clear credentials]', 'value': 'clear'},
-            {'label': '[clear mappings]', 'value': 'clear_mappings'},
             {'label': '[back]', 'value': 'back'}
         ],
         onclick=handle_ing_action
@@ -740,13 +736,6 @@ def handle_ibercaja_action(action: str) -> None:
         execute_upload_ibercaja()
     elif action == 'sync':
         execute_sync_ibercaja()
-    elif action == 'clear':
-        state.clear_ibercaja()
-        state.clear_actual()
-        put_text("[SYSTEM] Ibercaja and Actual Budget credentials cleared")
-    elif action == 'clear_mappings':
-        state.clear_saved_mappings()
-        put_text("[SYSTEM] All saved file and account mappings cleared")
     elif action == 'back':
         show_menu()
 
@@ -763,13 +752,6 @@ def handle_ing_action(action: str) -> None:
         execute_sync_ing('nomina')
     elif action == 'sync_naranja':
         execute_sync_ing('naranja')
-    elif action == 'clear':
-        state.clear_ing()
-        state.clear_actual()
-        put_text("[SYSTEM] ING and Actual Budget credentials cleared")
-    elif action == 'clear_mappings':
-        state.clear_saved_mappings()
-        put_text("[SYSTEM] All saved file and account mappings cleared")
     elif action == 'back':
         show_menu()
 
@@ -780,11 +762,108 @@ def handle_menu_selection(bank: str) -> None:
         show_ibercaja()
     elif bank == 'ing':
         show_ing()
+    elif bank == 'credentials':
+        show_credentials_management()
 
 
 def inject_styles() -> None:
     """Inject CSS styles immediately to prevent FOUC (Flash of Unstyled Content)."""
     put_html(f'<style>{CSS_THEME}</style>')
+
+
+def show_credentials_management() -> None:
+    """Show credentials and mappings management interface."""
+    clear()
+    inject_styles()
+    put_text("credentials & mappings")
+    put_text("----------------------")
+    put_text("")
+
+    # Show Ibercaja credentials status
+    put_text("ibercaja:")
+    if state.has_ibercaja_credentials():
+        put_text("  [ok] credentials stored")
+    else:
+        put_text("  [--] no credentials stored")
+
+    if state.has_saved_mapping('ibercaja'):
+        saved_file = state.get_saved_file('ibercaja')
+        saved_account = state.get_saved_account('ibercaja')
+        put_text(f"  [ok] sync mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("  [--] no sync mapping saved")
+
+    put_text("")
+
+    # Show ING credentials status
+    put_text("ing:")
+    if state.has_ing_credentials():
+        put_text("  [ok] credentials stored")
+    else:
+        put_text("  [--] no credentials stored")
+
+    if state.has_saved_mapping('ing_nomina'):
+        saved_file = state.get_saved_file('ing_nomina')
+        saved_account = state.get_saved_account('ing_nomina')
+        put_text(f"  [ok] nómina mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("  [--] no nómina mapping saved")
+
+    if state.has_saved_mapping('ing_naranja'):
+        saved_file = state.get_saved_file('ing_naranja')
+        saved_account = state.get_saved_account('ing_naranja')
+        put_text(f"  [ok] naranja mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("  [--] no naranja mapping saved")
+
+    put_text("")
+
+    # Show Actual Budget credentials status
+    put_text("actual budget:")
+    if state.has_actual_credentials():
+        put_text("  [ok] server password stored")
+    else:
+        put_text("  [--] no server password stored")
+
+    put_text("")
+    put_buttons(
+        [
+            {'label': '[clear ibercaja]', 'value': 'clear_ibercaja'},
+            {'label': '[clear ing]', 'value': 'clear_ing'},
+            {'label': '[clear actual]', 'value': 'clear_actual'},
+            {'label': '[clear all mappings]', 'value': 'clear_mappings'},
+            {'label': '[clear everything]', 'value': 'clear_all'},
+            {'label': '[back]', 'value': 'back'}
+        ],
+        onclick=handle_credentials_action
+    )
+
+
+def handle_credentials_action(action: str) -> None:
+    """Handle credentials management actions."""
+    if action == 'clear_ibercaja':
+        state.clear_ibercaja()
+        put_text("[SYSTEM] Ibercaja credentials cleared")
+        show_credentials_management()
+    elif action == 'clear_ing':
+        state.clear_ing()
+        put_text("[SYSTEM] ING credentials cleared")
+        show_credentials_management()
+    elif action == 'clear_actual':
+        state.clear_actual()
+        put_text("[SYSTEM] Actual Budget credentials cleared")
+        show_credentials_management()
+    elif action == 'clear_mappings':
+        state.clear_saved_mappings()
+        put_text("[SYSTEM] All saved file and account mappings cleared")
+        show_credentials_management()
+    elif action == 'clear_all':
+        state.clear_all()
+        state.clear_saved_mappings()
+        put_text("[SYSTEM] All credentials and mappings cleared")
+        show_credentials_management()
+    elif action == 'back':
+        show_menu()
 
 
 def show_menu() -> None:
@@ -803,7 +882,8 @@ def show_menu() -> None:
     put_buttons(
         [
             {'label': '[ibercaja]', 'value': 'ibercaja'},
-            {'label': '[ing]', 'value': 'ing'}
+            {'label': '[ing]', 'value': 'ing'},
+            {'label': '[manage credentials]', 'value': 'credentials'}
         ],
         onclick=handle_menu_selection
     )
