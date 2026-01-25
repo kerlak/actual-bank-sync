@@ -68,6 +68,7 @@ def sync_csv_to_actual(
     password: str,
     encryption_password: Optional[str],
     file_name: str,
+    account_name: Optional[str] = None,
     account_mapping: Optional[dict] = None,
     cert_path: Optional[str] = None
 ) -> SyncResult:
@@ -81,19 +82,22 @@ def sync_csv_to_actual(
         password: Server password
         encryption_password: File encryption password (optional)
         file_name: Budget file name in Actual
-        account_mapping: Custom account name mapping
+        account_name: Target account name (if not provided, uses account_mapping)
+        account_mapping: Custom account name mapping (used if account_name not provided)
         cert_path: Path to self-signed certificate (optional)
 
     Returns:
         SyncResult with import statistics
     """
-    mapping = account_mapping or DEFAULT_ACCOUNT_MAPPING
-    account_name = mapping.get(source)
+    # Use provided account_name, or fall back to mapping
+    if not account_name:
+        mapping = account_mapping or DEFAULT_ACCOUNT_MAPPING
+        account_name = mapping.get(source)
 
     if not account_name:
         return SyncResult(
             success=False,
-            message=f"No account mapping found for source: {source}"
+            message=f"No account name provided and no mapping found for source: {source}"
         )
 
     if not os.path.exists(csv_path):
@@ -230,3 +234,56 @@ def get_latest_csv(bank: str) -> Optional[str]:
     }
     path = paths.get(bank)
     return path if path and os.path.exists(path) else None
+
+
+def list_budget_files(base_url: str, password: str) -> list:
+    """
+    List available budget files in Actual Budget server.
+
+    Args:
+        base_url: Actual Budget server URL
+        password: Server password
+
+    Returns:
+        List of dicts with 'name' and 'file_id' keys
+    """
+    try:
+        with Actual(
+            base_url=base_url,
+            password=password,
+            cert=False
+        ) as actual:
+            files = actual.list_user_files()
+            return [{'name': f.name, 'file_id': f.file_id} for f in files.data]
+    except Exception as e:
+        print(f"[ERROR] Failed to list budget files: {str(e)}")
+        return []
+
+
+def list_accounts(base_url: str, password: str, file_name: str, encryption_password: Optional[str] = None) -> list:
+    """
+    List available accounts in a budget file.
+
+    Args:
+        base_url: Actual Budget server URL
+        password: Server password
+        file_name: Budget file name
+        encryption_password: File encryption password (optional)
+
+    Returns:
+        List of dicts with 'name' and 'id' keys
+    """
+    try:
+        with Actual(
+            base_url=base_url,
+            password=password,
+            encryption_password=encryption_password,
+            file=file_name,
+            cert=False
+        ) as actual:
+            actual.download_budget()
+            accounts = get_accounts(actual.session)
+            return [{'name': account.name, 'id': account.id} for account in accounts if not account.closed]
+    except Exception as e:
+        print(f"[ERROR] Failed to list accounts: {str(e)}")
+        return []

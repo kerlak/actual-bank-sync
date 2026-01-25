@@ -10,7 +10,7 @@ from typing import Optional
 from unittest.mock import patch
 
 from pywebio import config, start_server
-from pywebio.input import file_upload, input as pyi_input
+from pywebio.input import file_upload, input as pyi_input, select
 from pywebio.output import put_buttons, put_html, put_text, clear
 from playwright.sync_api import sync_playwright
 
@@ -89,12 +89,16 @@ class AppState:
     # Actual Budget credentials
     actual_password: Optional[str] = None
     actual_encryption_password: Optional[str] = None
-    # Account mapping for Actual Budget
+    # Account mapping for Actual Budget (legacy, kept for backward compatibility)
     account_mapping: dict = field(default_factory=lambda: {
         'ibercaja': 'Ibercaja común',
         'ing_nomina': 'ING Nómina',
         'ing_naranja': 'ING Naranja',
     })
+    # Saved mappings from source to Actual Budget file and account
+    file_mappings: dict = field(default_factory=dict)  # source -> file_name
+    account_mappings_saved: dict = field(default_factory=dict)  # source -> account_name
+    encryption_passwords: dict = field(default_factory=dict)  # file_name -> encryption_password
     # Request tracking
     _credential_queue: list = field(default_factory=list)
     _queue_index: int = 0
@@ -157,6 +161,35 @@ class AppState:
         self.clear_ing()
         self.clear_actual()
         self.current_bank = None
+
+    def has_saved_mapping(self, source: str) -> bool:
+        """Check if a source has saved file and account mapping."""
+        return source in self.file_mappings and source in self.account_mappings_saved
+
+    def get_saved_file(self, source: str) -> Optional[str]:
+        """Get saved file name for a source."""
+        return self.file_mappings.get(source)
+
+    def get_saved_account(self, source: str) -> Optional[str]:
+        """Get saved account name for a source."""
+        return self.account_mappings_saved.get(source)
+
+    def get_saved_encryption(self, file_name: str) -> Optional[str]:
+        """Get saved encryption password for a file."""
+        return self.encryption_passwords.get(file_name)
+
+    def save_mapping(self, source: str, file_name: str, account_name: str, encryption_password: Optional[str] = None) -> None:
+        """Save mapping from source to file and account."""
+        self.file_mappings[source] = file_name
+        self.account_mappings_saved[source] = account_name
+        if encryption_password:
+            self.encryption_passwords[file_name] = encryption_password
+
+    def clear_saved_mappings(self) -> None:
+        """Clear all saved mappings."""
+        self.file_mappings.clear()
+        self.account_mappings_saved.clear()
+        self.encryption_passwords.clear()
 
 
 # Global state
@@ -344,8 +377,8 @@ def execute_ing() -> None:
         put_text(traceback.format_exc())
 
 
-def request_actual_credentials() -> bool:
-    """Request Actual Budget credentials if not stored."""
+def request_actual_server_password() -> bool:
+    """Request Actual Budget server password if not stored."""
     if not state.has_actual_credentials():
         put_text("> Actual Budget server password:")
         state.actual_password = pyi_input(type='password')
@@ -353,11 +386,151 @@ def request_actual_credentials() -> bool:
             put_text("[ERROR] Password is required")
             return False
 
-        put_text("> Actual Budget file encryption key (leave empty if none):")
-        encryption = pyi_input(type='password')
-        state.actual_encryption_password = encryption if encryption else None
-
     return True
+
+
+def request_file_encryption_password(file_name: str) -> Optional[str]:
+    """Request encryption password for a specific budget file."""
+    # Check if we have a saved encryption password for this file
+    saved_encryption = state.get_saved_encryption(file_name)
+    if saved_encryption:
+        put_text(f"> Using saved encryption key for '{file_name}'")
+        return saved_encryption
+
+    put_text(f"> Encryption key for '{file_name}' (leave empty if none):")
+    blur_active_element()
+    encryption = pyi_input(type='password')
+    return encryption if encryption else None
+
+
+def select_file_and_account(source: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Select budget file and account for a source, using saved mappings if available.
+
+    Returns:
+        Tuple of (selected_file, selected_account, encryption_password) or (None, None, None) if cancelled
+    """
+    # Check if we have saved mappings
+    if state.has_saved_mapping(source):
+        saved_file = state.get_saved_file(source)
+        saved_account = state.get_saved_account(source)
+        put_text(f"[SAVED] File: {saved_file}")
+        put_text(f"[SAVED] Account: {saved_account}")
+        put_text("> Use saved mapping?")
+        blur_active_element()
+        use_saved = select(
+            label="",
+            options=[
+                ('Yes, use saved mapping', True),
+                ('No, select different file/account', False)
+            ]
+        )
+
+        if use_saved:
+            # Get encryption password for saved file
+            saved_encryption = state.get_saved_encryption(saved_file)
+            if saved_encryption:
+                put_text(f"[SYNC] Using saved encryption for '{saved_file}'")
+            return saved_file, saved_account, saved_encryption
+
+    # List available budget files
+    put_text("[SYNC] Fetching available budget files...")
+    budget_files = actual_sync.list_budget_files(
+        base_url=ACTUAL_BUDGET_URL,
+        password=state.actual_password
+    )
+
+    if not budget_files:
+        put_text("[ERROR] No budget files found or connection failed")
+        return None, None, None
+
+    # Check if ACTUAL_BUDGET_FILE env var is set (Home Assistant compatibility)
+    default_file = None
+    if ACTUAL_BUDGET_FILE:
+        # Try to find a matching file
+        for f in budget_files:
+            if f['name'] == ACTUAL_BUDGET_FILE or f['file_id'] == ACTUAL_BUDGET_FILE:
+                default_file = f['name']
+                put_text(f"[HA CONFIG] Found configured file: {default_file}")
+                break
+
+    # Let user select budget file
+    if default_file and len(budget_files) > 1:
+        put_text("> Select budget file (Home Assistant default pre-selected):")
+    else:
+        put_text("> Select budget file:")
+
+    blur_active_element()
+
+    # Set default option if found
+    file_options = [(f['name'], f['name']) for f in budget_files]
+    if default_file:
+        # Move default to the top of the list
+        file_options = [(default_file, default_file)] + [(f['name'], f['name']) for f in budget_files if f['name'] != default_file]
+
+    selected_file = select(
+        label="",
+        options=file_options
+    )
+
+    if not selected_file:
+        put_text("[ERROR] No file selected")
+        return None, None, None
+
+    put_text(f"[SYNC] Selected file: {selected_file}")
+
+    # Request encryption password for this specific file
+    file_encryption_password = request_file_encryption_password(selected_file)
+
+    # List available accounts in the selected file
+    put_text("[SYNC] Fetching available accounts...")
+    accounts = actual_sync.list_accounts(
+        base_url=ACTUAL_BUDGET_URL,
+        password=state.actual_password,
+        file_name=selected_file,
+        encryption_password=file_encryption_password
+    )
+
+    if not accounts:
+        put_text("[ERROR] No accounts found or connection failed")
+        return None, None, None
+
+    # Check if there's a legacy account mapping for this source (Home Assistant compatibility)
+    default_account = state.account_mapping.get(source)
+    matching_account = None
+    if default_account:
+        for acc in accounts:
+            if acc['name'] == default_account:
+                matching_account = default_account
+                put_text(f"[HA CONFIG] Found configured account: {matching_account}")
+                break
+
+    # Let user select account
+    if matching_account and len(accounts) > 1:
+        put_text("> Select target account (Home Assistant default pre-selected):")
+    else:
+        put_text("> Select target account:")
+
+    blur_active_element()
+
+    # Set default option if found
+    account_options = [(a['name'], a['name']) for a in accounts]
+    if matching_account:
+        # Move default to the top of the list
+        account_options = [(matching_account, matching_account)] + [(a['name'], a['name']) for a in accounts if a['name'] != matching_account]
+
+    selected_account = select(
+        label="",
+        options=account_options
+    )
+
+    if not selected_account:
+        put_text("[ERROR] No account selected")
+        return None, None, None
+
+    put_text(f"[SYNC] Target account: {selected_account}")
+
+    return selected_file, selected_account, file_encryption_password
 
 
 def execute_sync_ibercaja() -> None:
@@ -365,7 +538,8 @@ def execute_sync_ibercaja() -> None:
     put_text("---")
     put_text("sync to actual budget:")
 
-    if not request_actual_credentials():
+    # Request server password only
+    if not request_actual_server_password():
         return
 
     csv_path = actual_sync.get_latest_csv('ibercaja')
@@ -374,16 +548,21 @@ def execute_sync_ibercaja() -> None:
         return
 
     put_text(f"[SYNC] CSV: {csv_path}")
-    put_text(f"[SYNC] Target account: {state.account_mapping['ibercaja']}")
+
+    # Select file and account (using saved mappings if available)
+    selected_file, selected_account, file_encryption_password = select_file_and_account('ibercaja')
+
+    if not selected_file or not selected_account:
+        return
 
     result = actual_sync.sync_csv_to_actual(
         csv_path=csv_path,
         source='ibercaja',
         base_url=ACTUAL_BUDGET_URL,
         password=state.actual_password,
-        encryption_password=state.actual_encryption_password,
-        file_name=ACTUAL_BUDGET_FILE,
-        account_mapping=state.account_mapping,
+        encryption_password=file_encryption_password,
+        file_name=selected_file,
+        account_name=selected_account,
         cert_path=ACTUAL_CERT_PATH
     )
 
@@ -392,6 +571,10 @@ def execute_sync_ibercaja() -> None:
         if result.errors:
             for err in result.errors[:5]:
                 put_text(f"[WARN] {err}")
+
+        # Save mapping for future use
+        state.save_mapping('ibercaja', selected_file, selected_account, file_encryption_password)
+        put_text("[SAVED] File and account mapping saved for future syncs")
     else:
         put_text(f"[ERROR] {result.message}")
 
@@ -401,7 +584,8 @@ def execute_sync_ing(account_type: str) -> None:
     put_text("---")
     put_text(f"sync to actual budget ({account_type}):")
 
-    if not request_actual_credentials():
+    # Request server password only
+    if not request_actual_server_password():
         return
 
     source = f'ing_{account_type}'
@@ -411,16 +595,21 @@ def execute_sync_ing(account_type: str) -> None:
         return
 
     put_text(f"[SYNC] CSV: {csv_path}")
-    put_text(f"[SYNC] Target account: {state.account_mapping[source]}")
+
+    # Select file and account (using saved mappings if available)
+    selected_file, selected_account, file_encryption_password = select_file_and_account(source)
+
+    if not selected_file or not selected_account:
+        return
 
     result = actual_sync.sync_csv_to_actual(
         csv_path=csv_path,
         source=source,
         base_url=ACTUAL_BUDGET_URL,
         password=state.actual_password,
-        encryption_password=state.actual_encryption_password,
-        file_name=ACTUAL_BUDGET_FILE,
-        account_mapping=state.account_mapping,
+        encryption_password=file_encryption_password,
+        file_name=selected_file,
+        account_name=selected_account,
         cert_path=ACTUAL_CERT_PATH
     )
 
@@ -429,6 +618,10 @@ def execute_sync_ing(account_type: str) -> None:
         if result.errors:
             for err in result.errors[:5]:
                 put_text(f"[WARN] {err}")
+
+        # Save mapping for future use
+        state.save_mapping(source, selected_file, selected_account, file_encryption_password)
+        put_text("[SAVED] File and account mapping saved for future syncs")
     else:
         put_text(f"[ERROR] {result.message}")
 
@@ -481,13 +674,19 @@ def show_ibercaja() -> None:
     else:
         put_text("[--] no credentials stored")
 
+    if state.has_saved_mapping('ibercaja'):
+        saved_file = state.get_saved_file('ibercaja')
+        saved_account = state.get_saved_account('ibercaja')
+        put_text(f"[ok] sync mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("[--] no sync mapping saved")
+
     put_text("")
     put_buttons(
         [
             {'label': '[start download]', 'value': 'download'},
             {'label': '[upload xlsx]', 'value': 'upload'},
             {'label': '[sync to actual]', 'value': 'sync'},
-            {'label': '[clear credentials]', 'value': 'clear'},
             {'label': '[back]', 'value': 'back'}
         ],
         onclick=handle_ibercaja_action
@@ -542,6 +741,21 @@ def show_ing() -> None:
     else:
         put_text("[--] no credentials stored")
 
+    # Show saved mappings
+    if state.has_saved_mapping('ing_nomina'):
+        saved_file = state.get_saved_file('ing_nomina')
+        saved_account = state.get_saved_account('ing_nomina')
+        put_text(f"[ok] nómina mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("[--] no nómina mapping saved")
+
+    if state.has_saved_mapping('ing_naranja'):
+        saved_file = state.get_saved_file('ing_naranja')
+        saved_account = state.get_saved_account('ing_naranja')
+        put_text(f"[ok] naranja mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("[--] no naranja mapping saved")
+
     put_text("")
     put_buttons(
         [
@@ -550,7 +764,6 @@ def show_ing() -> None:
             {'label': '[upload naranja xlsx]', 'value': 'upload_naranja'},
             {'label': '[sync nómina]', 'value': 'sync_nomina'},
             {'label': '[sync naranja]', 'value': 'sync_naranja'},
-            {'label': '[clear credentials]', 'value': 'clear'},
             {'label': '[back]', 'value': 'back'}
         ],
         onclick=handle_ing_action
@@ -565,10 +778,6 @@ def handle_ibercaja_action(action: str) -> None:
         execute_upload_ibercaja()
     elif action == 'sync':
         execute_sync_ibercaja()
-    elif action == 'clear':
-        state.clear_ibercaja()
-        state.clear_actual()
-        put_text("[SYSTEM] Ibercaja and Actual Budget credentials cleared")
     elif action == 'back':
         show_menu()
 
@@ -585,10 +794,6 @@ def handle_ing_action(action: str) -> None:
         execute_sync_ing('nomina')
     elif action == 'sync_naranja':
         execute_sync_ing('naranja')
-    elif action == 'clear':
-        state.clear_ing()
-        state.clear_actual()
-        put_text("[SYSTEM] ING and Actual Budget credentials cleared")
     elif action == 'back':
         show_menu()
 
@@ -599,11 +804,108 @@ def handle_menu_selection(bank: str) -> None:
         show_ibercaja()
     elif bank == 'ing':
         show_ing()
+    elif bank == 'credentials':
+        show_credentials_management()
 
 
 def inject_styles() -> None:
     """Inject CSS styles immediately to prevent FOUC (Flash of Unstyled Content)."""
     put_html(f'<style>{CSS_THEME}</style>')
+
+
+def show_credentials_management() -> None:
+    """Show credentials and mappings management interface."""
+    clear()
+    inject_styles()
+    put_text("credentials & mappings")
+    put_text("----------------------")
+    put_text("")
+
+    # Show Ibercaja credentials status
+    put_text("ibercaja:")
+    if state.has_ibercaja_credentials():
+        put_text("  [ok] credentials stored")
+    else:
+        put_text("  [--] no credentials stored")
+
+    if state.has_saved_mapping('ibercaja'):
+        saved_file = state.get_saved_file('ibercaja')
+        saved_account = state.get_saved_account('ibercaja')
+        put_text(f"  [ok] sync mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("  [--] no sync mapping saved")
+
+    put_text("")
+
+    # Show ING credentials status
+    put_text("ing:")
+    if state.has_ing_credentials():
+        put_text("  [ok] credentials stored")
+    else:
+        put_text("  [--] no credentials stored")
+
+    if state.has_saved_mapping('ing_nomina'):
+        saved_file = state.get_saved_file('ing_nomina')
+        saved_account = state.get_saved_account('ing_nomina')
+        put_text(f"  [ok] nómina mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("  [--] no nómina mapping saved")
+
+    if state.has_saved_mapping('ing_naranja'):
+        saved_file = state.get_saved_file('ing_naranja')
+        saved_account = state.get_saved_account('ing_naranja')
+        put_text(f"  [ok] naranja mapping: {saved_file} -> {saved_account}")
+    else:
+        put_text("  [--] no naranja mapping saved")
+
+    put_text("")
+
+    # Show Actual Budget credentials status
+    put_text("actual budget:")
+    if state.has_actual_credentials():
+        put_text("  [ok] server password stored")
+    else:
+        put_text("  [--] no server password stored")
+
+    put_text("")
+    put_buttons(
+        [
+            {'label': '[clear ibercaja]', 'value': 'clear_ibercaja'},
+            {'label': '[clear ing]', 'value': 'clear_ing'},
+            {'label': '[clear actual]', 'value': 'clear_actual'},
+            {'label': '[clear all mappings]', 'value': 'clear_mappings'},
+            {'label': '[clear everything]', 'value': 'clear_all'},
+            {'label': '[back]', 'value': 'back'}
+        ],
+        onclick=handle_credentials_action
+    )
+
+
+def handle_credentials_action(action: str) -> None:
+    """Handle credentials management actions."""
+    if action == 'clear_ibercaja':
+        state.clear_ibercaja()
+        put_text("[SYSTEM] Ibercaja credentials cleared")
+        show_credentials_management()
+    elif action == 'clear_ing':
+        state.clear_ing()
+        put_text("[SYSTEM] ING credentials cleared")
+        show_credentials_management()
+    elif action == 'clear_actual':
+        state.clear_actual()
+        put_text("[SYSTEM] Actual Budget credentials cleared")
+        show_credentials_management()
+    elif action == 'clear_mappings':
+        state.clear_saved_mappings()
+        put_text("[SYSTEM] All saved file and account mappings cleared")
+        show_credentials_management()
+    elif action == 'clear_all':
+        state.clear_all()
+        state.clear_saved_mappings()
+        put_text("[SYSTEM] All credentials and mappings cleared")
+        show_credentials_management()
+    elif action == 'back':
+        show_menu()
 
 
 def show_menu() -> None:
@@ -622,7 +924,8 @@ def show_menu() -> None:
     put_buttons(
         [
             {'label': '[ibercaja]', 'value': 'ibercaja'},
-            {'label': '[ing]', 'value': 'ing'}
+            {'label': '[ing]', 'value': 'ing'},
+            {'label': '[manage credentials]', 'value': 'credentials'}
         ],
         onclick=handle_menu_selection
     )
