@@ -8,7 +8,23 @@ from typing import Optional
 
 import pandas as pd
 from playwright.sync_api import Playwright, Page, Browser, BrowserContext
-from playwright_stealth import stealth_sync
+
+# Handle playwright-stealth API changes between versions
+try:
+    # New API (2.0.0+)
+    from playwright_stealth import Stealth
+    def apply_stealth(page: Page) -> None:
+        Stealth().apply_stealth_sync(page.context)
+except ImportError:
+    try:
+        # Old API (pre-2.0.0)
+        from playwright_stealth import stealth_sync
+        def apply_stealth(page: Page) -> None:
+            stealth_sync(page)
+    except ImportError:
+        # No stealth available, continue without it
+        def apply_stealth(page: Page) -> None:
+            print("[ING] Warning: playwright-stealth not available, continuing without stealth")
 
 # Constants
 ING_URL = "https://ing.ingdirect.es/app-login/"
@@ -132,7 +148,7 @@ def run(playwright: Playwright) -> None:
         print("[ING] Context created (1920x1080)")
 
         page = context.new_page()
-        stealth_sync(page)
+        apply_stealth(page)
         print("[ING] New page created (stealth applied)")
 
         print("[ING] Requesting credentials...")
