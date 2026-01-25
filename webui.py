@@ -40,7 +40,8 @@ CSS_THEME = """
     .btn:hover { color: #e89b7b !important; }
     .btn:focus { box-shadow: none !important; }
     .form-group, .card, .input-container, .pywebio, .container,
-    .input-group, .modal-content, .card-body, [class*="input"], [class*="card"] {
+    .input-group, .modal-content, .card-body, [class*="input"], [class*="card"],
+    [id*="input-container"] {
         background: #191919 !important;
         background-color: #191919 !important;
         border: none !important;
