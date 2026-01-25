@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-01-25
+
+### Fixed
+- **playwright-stealth compatibility**: Fixed ImportError with playwright-stealth 2.0.0+ which changed its API from `stealth_sync(page)` to `Stealth().apply_stealth_sync(context)`. The code now handles both old and new API versions.
+
 ## [1.1.0] - 2025-01-24
 
 ### Added
