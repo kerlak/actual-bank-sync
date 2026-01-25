@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2025-01-25
+
+### Added
+- **Favicon**: Custom SVG favicon with sync arrows and $ symbol in brand colors
+- **Web title**: Proper "Banking Hub" title in browser tab
+
+### Fixed
+- **Dark theme consistency**: Fixed input-container elements displaying white background instead of dark theme
+
 ## [1.1.1] - 2025-01-25
 
 ### Fixed
