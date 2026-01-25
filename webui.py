@@ -22,6 +22,19 @@ SERVER_PORT = 2077
 ACTUAL_BUDGET_URL = os.environ.get("ACTUAL_BUDGET_URL", "https://localhost")
 ACTUAL_BUDGET_FILE = os.environ.get("ACTUAL_BUDGET_FILE", "")
 ACTUAL_CERT_PATH = os.environ.get("ACTUAL_CERT_PATH", "./certs/actual.pem")
+APP_TITLE = "Banking Hub"
+
+# SVG favicon: sync arrows with euro symbol (base64 encoded)
+FAVICON_SVG = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#191919"/>
+  <g fill="none" stroke="#da7756" stroke-width="3" stroke-linecap="round">
+    <path d="M20 32a12 12 0 0 1 12-12"/>
+    <path d="M32 16l5 4-5 4"/>
+    <path d="M44 32a12 12 0 0 1-12 12"/>
+    <path d="M32 48l-5-4 5-4"/>
+  </g>
+  <text x="32" y="38" text-anchor="middle" fill="#da7756" font-family="monospace" font-size="16" font-weight="bold">$</text>
+</svg>'''
 
 CSS_THEME = """
     footer, .pywebio-footer, [class*='footer'] { display: none !important; }
@@ -810,8 +823,13 @@ def handle_menu_selection(bank: str) -> None:
 
 
 def inject_styles() -> None:
-    """Inject CSS styles immediately to prevent FOUC (Flash of Unstyled Content)."""
-    put_html(f'<style>{CSS_THEME}</style>')
+    """Inject CSS styles and favicon to prevent FOUC (Flash of Unstyled Content)."""
+    import base64
+    favicon_b64 = base64.b64encode(FAVICON_SVG.encode()).decode()
+    put_html(f'''
+        <style>{CSS_THEME}</style>
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{favicon_b64}">
+    ''')
 
 
 def show_credentials_management() -> None:
@@ -934,7 +952,7 @@ def show_menu() -> None:
 
 def main() -> None:
     """Main entry point for the PyWebIO application."""
-    config(title="banking hub", css_style=CSS_THEME)
+    config(title=APP_TITLE, css_style=CSS_THEME)
     show_menu()
 
 
