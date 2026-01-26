@@ -207,9 +207,9 @@ def run(playwright: Playwright) -> None:
         dni_field = page.get_by_role("textbox", name="Número de documento DNI o")
         try:
             dni_field.wait_for(state="visible", timeout=10000)
-        except:
+        except Exception as e:
             # Try alternative selector
-            print("[ING] DNI field not found by role, trying alternative...")
+            print(f"[ING] DNI field not found by role ({type(e).__name__}), trying alternative...")
             dni_field = page.locator('input[name*="dni"], input[id*="dni"], input[placeholder*="DNI"]').first
 
         print("[ING] Filling DNI...")
@@ -259,7 +259,7 @@ def run(playwright: Playwright) -> None:
                     target_frame = frame
                     print(f"[DEBUG] Found button '{btn.first.text_content()[:20]}' in frame")
                     break
-            except:
+            except (TimeoutError, Exception):
                 continue
 
         if continue_btn is None:
@@ -272,7 +272,7 @@ def run(playwright: Playwright) -> None:
                         target_frame = frame
                         print("[DEBUG] Found button via CSS selector")
                         break
-                except:
+                except (TimeoutError, Exception):
                     continue
 
         print(f"[DEBUG] Continue button found: {continue_btn is not None}")
@@ -317,7 +317,7 @@ def run(playwright: Playwright) -> None:
                     text = error_elements.nth(i).text_content()
                     if text and text.strip():
                         print(f"[DEBUG] Error/Alert found: {text[:100]}")
-                except:
+                except (TimeoutError, Exception):
                     pass
 
         # Wait for PIN challenge
@@ -345,7 +345,7 @@ def run(playwright: Playwright) -> None:
                 try:
                     text = btn.text_content()[:30] if btn.text_content() else "N/A"
                     print(f"[DEBUG]   Button {i}: {text}")
-                except:
+                except (TimeoutError, Exception):
                     pass
 
             raise Exception("Timeout waiting for PIN challenge")
@@ -377,7 +377,7 @@ def run(playwright: Playwright) -> None:
             page.wait_for_url("**/pfm/#overall-position**", timeout=15000)
             print("[ING] Access granted")
             debug_page_state(page, "access_granted")
-        except:
+        except (TimeoutError, Exception):
             debug_page_state(page, "access_check_failed")
             if page.get_by_role("heading", name="Acceso seguro").is_visible():
                 print("[ING] MOBILE VALIDATION REQUIRED - Check your phone")
@@ -421,7 +421,7 @@ def run(playwright: Playwright) -> None:
                     try:
                         text = link.text_content()[:40] if link.text_content() else "N/A"
                         print(f"[DEBUG]   Link {i}: {text}")
-                    except:
+                    except (TimeoutError, Exception):
                         pass
 
                 # Check if Didomi is actually present
@@ -501,7 +501,7 @@ def run(playwright: Playwright) -> None:
                             text = link.text_content()[:50] if link.text_content() else "N/A"
                             href = link.get_attribute("href") or "no-href"
                             print(f"[DEBUG]   Link {i}: '{text}' -> {href[:40]}")
-                        except:
+                        except (TimeoutError, Exception):
                             pass
 
                     # Also check for elements with account-related text
