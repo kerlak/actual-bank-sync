@@ -234,8 +234,7 @@ class LogCapture(io.StringIO):
     # App URL schemes and fallbacks
     APP_LINKS = {
         'ing': {
-            'scheme': 'ingdirect://',  # ING Direct Spain URL scheme
-            'fallback': 'https://ing.es',  # Fallback to website
+            'fallback': 'https://ing.es',  # ING website (opens app if installed)
             'label': 'Abrir app ING'
         }
     }
@@ -249,16 +248,16 @@ class LogCapture(io.StringIO):
                 app_name = stripped.replace("OPEN_APP:", "").rstrip(":")
                 if app_name in self.APP_LINKS:
                     app_info = self.APP_LINKS[app_name]
-                    # Create clickable link that tries URL scheme first, falls back to website
+                    # Create clickable link styled like app buttons
                     put_html(f'''
                         <div style="margin: 10px 0;">
-                            <a href="{app_info['scheme']}"
-                               onclick="setTimeout(function(){{ window.location.href='{app_info['fallback']}'; }}, 2000); return true;"
-                               style="display: inline-block; padding: 12px 20px; background: #da7756; color: #191919;
-                                      text-decoration: none; font-family: monospace; font-weight: bold; border-radius: 4px;">
+                            <a href="{app_info['fallback']}"
+                               target="_blank"
+                               style="display: inline-block; background: transparent; color: #da7756;
+                                      text-decoration: none; font-family: monospace; padding: 0; margin-right: 1em;">
                                 [{app_info['label']}]
                             </a>
-                            <span style="color: #888; margin-left: 10px; font-size: 12px;">
+                            <span style="color: #888; font-size: 12px;">
                                 Vuelve aquí tras aprobar
                             </span>
                         </div>
@@ -342,7 +341,10 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             put_text(f"Using stored DNI: {'*' * len(state.ing_dni)}")
             state.advance()
             return state.ing_dni
-        state.ing_dni = pyi_input(type='password')
+        state.ing_dni = pyi_input(
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+        )
         state.advance()
         return state.ing_dni
 
@@ -351,7 +353,10 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             put_text(f"Using stored day: {state.ing_dia}")
             state.advance()
             return state.ing_dia
-        state.ing_dia = pyi_input(type='password')
+        state.ing_dia = pyi_input(
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+        )
         state.advance()
         return state.ing_dia
 
@@ -360,7 +365,10 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             put_text(f"Using stored month: {state.ing_mes}")
             state.advance()
             return state.ing_mes
-        state.ing_mes = pyi_input(type='password')
+        state.ing_mes = pyi_input(
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+        )
         state.advance()
         return state.ing_mes
 
@@ -369,7 +377,10 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             put_text(f"Using stored year: {state.ing_ano}")
             state.advance()
             return state.ing_ano
-        state.ing_ano = pyi_input(type='password')
+        state.ing_ano = pyi_input(
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+        )
         state.advance()
         return state.ing_ano
 
