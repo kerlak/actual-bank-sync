@@ -38,12 +38,11 @@ cert = cert_path if cert_path and os.path.exists(cert_path) else False
   - Divergencia entre `requirements.txt` y `Dockerfile`
 - **Solución**: Fijar versiones exactas y sincronizar
 
-### 5. Mejorar generación de transaction ID
+### 5. Validar keys en generación de transaction ID
 - **Ubicación**: `actual_sync.py:37-41`
-- **Problemas**:
-  - Incluir `Saldo` en hash causa duplicados si el saldo cambia
-  - Sin validación de existencia de keys
-- **Solución**: Usar solo Fecha + Concepto + Importe y validar keys
+- **Nota**: El `Saldo` ES necesario en el hash para distinguir transacciones idénticas el mismo día (ej: dos compras de -4.90€ en la misma gasolinera)
+- **Problema pendiente**: Sin validación de existencia de keys antes de acceder
+- **Solución**: Añadir validación con valores por defecto para keys opcionales
 
 ## Prioridad Baja (Mejoras)
 
