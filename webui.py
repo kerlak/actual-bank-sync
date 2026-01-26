@@ -3,6 +3,8 @@
 import io
 import os
 import sys
+import threading
+import time
 import traceback
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -11,7 +13,7 @@ from unittest.mock import patch
 
 from pywebio import config, start_server
 from pywebio.input import file_upload, input as pyi_input, select
-from pywebio.output import put_buttons, put_html, put_text, clear
+from pywebio.output import put_buttons, put_html, put_text, clear, use_scope
 from playwright.sync_api import sync_playwright
 
 from banks import ibercaja, ing
@@ -67,6 +69,55 @@ CSS_THEME = """
         border: 1px solid #444 !important;
     }
 """
+
+
+class ActivityIndicator:
+    """ASCII spinner to show activity and WebSocket connection status."""
+
+    # ASCII spinner frames (braille spinner)
+    FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+    def __init__(self):
+        self.active = False
+        self.thread = None
+        self.frame_index = 0
+
+    def start(self):
+        """Start the spinner animation."""
+        if self.active:
+            return
+        self.active = True
+        self.frame_index = 0
+        self.thread = threading.Thread(target=self._animate, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        """Stop the spinner animation."""
+        self.active = False
+        if self.thread:
+            self.thread.join(timeout=1)
+        try:
+            with use_scope('activity-indicator', clear=True):
+                pass  # Clear the indicator
+        except:
+            pass
+
+    def _animate(self):
+        """Animation loop that updates the spinner."""
+        while self.active:
+            try:
+                frame = self.FRAMES[self.frame_index]
+                with use_scope('activity-indicator', clear=True):
+                    put_html(f'<span style="color: #da7756; font-family: monospace;">{frame} active</span>')
+                self.frame_index = (self.frame_index + 1) % len(self.FRAMES)
+                time.sleep(0.1)  # Update 10 times per second
+            except Exception:
+                # Gracefully handle any scope errors
+                break
+
+
+# Global activity indicator instance
+activity_indicator = ActivityIndicator()
 
 
 class Bank(Enum):
@@ -391,11 +442,13 @@ def execute_ibercaja() -> None:
     """Execute Ibercaja download."""
     put_text("---")
     put_text("execution log:")
+    put_html('<div id="activity-indicator"></div>')  # Create scope for activity indicator
 
     state.setup_ibercaja_queue()
     old_stdout = sys.stdout
 
     try:
+        activity_indicator.start()  # Start activity indicator
         sys.stdout = LogCapture()
 
         with patch('getpass.getpass', side_effect=dynamic_getpass_ibercaja):
@@ -405,10 +458,12 @@ def execute_ibercaja() -> None:
                 print("[WEBUI] Ibercaja completed")
 
         sys.stdout = old_stdout
+        activity_indicator.stop()  # Stop activity indicator
         put_text("[PROCESS] Download completed. Files in ./downloads/ibercaja")
 
     except Exception as e:
         sys.stdout = old_stdout
+        activity_indicator.stop()  # Stop activity indicator on error
         put_text(f"[ERROR] {str(e)}")
         put_text(traceback.format_exc())
 
@@ -417,11 +472,13 @@ def execute_ing() -> None:
     """Execute ING download."""
     put_text("---")
     put_text("execution log:")
+    put_html('<div id="activity-indicator"></div>')  # Create scope for activity indicator
 
     state.setup_ing_queue()
     old_stdout = sys.stdout
 
     try:
+        activity_indicator.start()  # Start activity indicator
         sys.stdout = LogCapture()
 
         with patch('getpass.getpass', side_effect=dynamic_getpass_ing):
@@ -431,10 +488,12 @@ def execute_ing() -> None:
                 print("[WEBUI] ING completed")
 
         sys.stdout = old_stdout
+        activity_indicator.stop()  # Stop activity indicator
         put_text("[PROCESS] Download completed. Files in ./downloads/ing")
 
     except Exception as e:
         sys.stdout = old_stdout
+        activity_indicator.stop()  # Stop activity indicator on error
         put_text(f"[ERROR] {str(e)}")
         put_text(traceback.format_exc())
 
@@ -617,6 +676,9 @@ def execute_sync_ibercaja() -> None:
     if not selected_file or not selected_account:
         return
 
+    put_html('<div id="activity-indicator"></div>')  # Create scope for activity indicator
+    activity_indicator.start()  # Start activity indicator
+
     result = actual_sync.sync_csv_to_actual(
         csv_path=csv_path,
         source='ibercaja',
@@ -627,6 +689,8 @@ def execute_sync_ibercaja() -> None:
         account_name=selected_account,
         cert_path=ACTUAL_CERT_PATH
     )
+
+    activity_indicator.stop()  # Stop activity indicator
 
     if result.success:
         put_text(f"[OK] {result.message}")
@@ -664,6 +728,9 @@ def execute_sync_ing(account_type: str) -> None:
     if not selected_file or not selected_account:
         return
 
+    put_html('<div id="activity-indicator"></div>')  # Create scope for activity indicator
+    activity_indicator.start()  # Start activity indicator
+
     result = actual_sync.sync_csv_to_actual(
         csv_path=csv_path,
         source=source,
@@ -674,6 +741,8 @@ def execute_sync_ing(account_type: str) -> None:
         account_name=selected_account,
         cert_path=ACTUAL_CERT_PATH
     )
+
+    activity_indicator.stop()  # Stop activity indicator
 
     if result.success:
         put_text(f"[OK] {result.message}")

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.6] - 2026-01-26
 
+### Added
+- **Activity indicator**: ASCII spinner (braille characters) shows when operations are running, confirming WebSocket connection is active
+
 ### Fixed
 - **WebSocket reconnection**: Now reconnects automatically without reloading the page, preserving execution context and logs
 - **Server configuration**: Added 60-second reconnection timeout to allow automatic reconnection after network interruptions
