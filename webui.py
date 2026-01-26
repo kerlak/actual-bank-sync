@@ -231,9 +231,42 @@ def auto_scroll() -> None:
 class LogCapture(io.StringIO):
     """Captures stdout and displays it in real-time in PyWebIO."""
 
+    # App URL schemes and fallbacks
+    APP_LINKS = {
+        'ing': {
+            'scheme': 'ingdirect://',  # ING Direct Spain URL scheme
+            'fallback': 'https://ing.es',  # Fallback to website
+            'label': 'Abrir app ING'
+        }
+    }
+
     def write(self, message: str) -> int:
         if message and message.strip():
-            put_text(message.rstrip())
+            stripped = message.strip()
+
+            # Check for app open marker: OPEN_APP:appname:
+            if stripped.startswith("OPEN_APP:") and stripped.endswith(":"):
+                app_name = stripped.replace("OPEN_APP:", "").rstrip(":")
+                if app_name in self.APP_LINKS:
+                    app_info = self.APP_LINKS[app_name]
+                    # Create clickable link that tries URL scheme first, falls back to website
+                    put_html(f'''
+                        <div style="margin: 10px 0;">
+                            <a href="{app_info['scheme']}"
+                               onclick="setTimeout(function(){{ window.location.href='{app_info['fallback']}'; }}, 2000); return true;"
+                               style="display: inline-block; padding: 12px 20px; background: #da7756; color: #191919;
+                                      text-decoration: none; font-family: monospace; font-weight: bold; border-radius: 4px;">
+                                [{app_info['label']}]
+                            </a>
+                            <span style="color: #888; margin-left: 10px; font-size: 12px;">
+                                Vuelve aquí tras aprobar
+                            </span>
+                        </div>
+                    ''')
+                    auto_scroll()
+                    return len(message)
+
+            put_text(stripped)
             auto_scroll()
         return len(message)
 

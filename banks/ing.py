@@ -381,6 +381,7 @@ def run(playwright: Playwright) -> None:
             debug_page_state(page, "access_check_failed")
             if page.get_by_role("heading", name="Acceso seguro").is_visible():
                 print("[ING] MOBILE VALIDATION REQUIRED - Check your phone")
+                print("OPEN_APP:ing:")  # Special marker for WebUI to show app link
                 page.get_by_role("heading", name="Acceso seguro").click()
                 try:
                     page.wait_for_url("**/pfm/#overall-position**", timeout=60000)
