@@ -899,13 +899,23 @@ def inject_styles() -> None:
                 padding: 10px;
                 font-family: monospace;
                 z-index: 9999;
-                cursor: pointer;
             `;
-            reconnectBanner.innerHTML = 'Connection may have dropped. <strong>Tap here to reconnect</strong>';
-            reconnectBanner.onclick = function() {
-                window.location.reload();
-            };
+            reconnectBanner.innerHTML = 'Connection dropped. <strong>Reconnecting automatically...</strong>';
             document.body.insertBefore(reconnectBanner, document.body.firstChild);
+
+            // Monitor WebSocket state and remove banner when connection is restored
+            const checkInterval = setInterval(function() {
+                if (window.WebIO && window.WebIO.session && window.WebIO.session._ws) {
+                    const ws = window.WebIO.session._ws;
+                    if (ws.readyState === WebSocket.OPEN) {
+                        removeReconnectBanner();
+                        clearInterval(checkInterval);
+                    }
+                }
+            }, 500);
+
+            // Clear interval after 60 seconds to avoid memory leak
+            setTimeout(function() { clearInterval(checkInterval); }, 60000);
         }
 
         function removeReconnectBanner() {
@@ -1084,4 +1094,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    start_server(main, port=SERVER_PORT, debug=False)
+    start_server(main, port=SERVER_PORT, debug=False, reconnect_timeout=60)
