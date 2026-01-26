@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-01-26
+
+### Fixed
+- **ING app link styling**: Now matches other app buttons (transparent background with orange text instead of solid orange button)
+- **ING app link functionality**: Opens ING website directly in new tab (more reliable than URL scheme approach)
+- **Mobile numeric keyboard**: DNI and birthdate inputs now show numeric keyboard on mobile devices (matching PIN input behavior)
+
 ## [1.1.4] - 2025-01-26
 
 ### Added
