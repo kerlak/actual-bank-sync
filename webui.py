@@ -351,10 +351,10 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
         put_text(f"          {' '.join(pos_labels)}")
 
         blur_active_element()
-        # Use tel type for numeric keyboard on iOS, with CSS masking
+        # Use text with inputmode for numeric keyboard, CSS handles masking
         pin_digits = pyi_input(
-            type='tel',
-            other_html_attrs={'class': 'masked-input', 'autocomplete': 'off'}
+            type='text',
+            other_html_attrs={'inputmode': 'numeric', 'class': 'masked-input', 'autocomplete': 'off'}
         )
         return pin_digits
 
@@ -371,8 +371,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_dni
         state.ing_dni = pyi_input(
-            type='tel',
-            other_html_attrs={'class': 'masked-input', 'autocomplete': 'off'}
+            type='text',
+            other_html_attrs={'inputmode': 'numeric', 'class': 'masked-input', 'autocomplete': 'off'}
         )
         state.advance()
         return state.ing_dni
@@ -383,8 +383,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_dia
         state.ing_dia = pyi_input(
-            type='tel',
-            other_html_attrs={'autocomplete': 'off'}
+            type='text',
+            other_html_attrs={'inputmode': 'numeric', 'autocomplete': 'off'}
         )
         state.advance()
         return state.ing_dia
@@ -395,8 +395,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_mes
         state.ing_mes = pyi_input(
-            type='tel',
-            other_html_attrs={'autocomplete': 'off'}
+            type='text',
+            other_html_attrs={'inputmode': 'numeric', 'autocomplete': 'off'}
         )
         state.advance()
         return state.ing_mes
@@ -407,8 +407,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_ano
         state.ing_ano = pyi_input(
-            type='tel',
-            other_html_attrs={'autocomplete': 'off'}
+            type='text',
+            other_html_attrs={'inputmode': 'numeric', 'autocomplete': 'off'}
         )
         state.advance()
         return state.ing_ano

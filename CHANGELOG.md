@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Ibercaja Excel parsing**: Auto-detect header row instead of hardcoded row 6. Handles different Excel formats and maps column name variations
-- **Mobile numeric keyboard**: Changed from `type='password'` to `type='tel'` for DNI, dates and PIN inputs. iOS now shows numeric keyboard correctly
+- **Mobile numeric keyboard**: Changed to `type='text'` with `inputmode='numeric'` for DNI, dates and PIN inputs. PyWebIO doesn't support `type='tel'`
 - **Reconnection banner**: Banner now dismissible by tap, and properly removes itself when WebSocket reconnects
 - **CSV validation**: Added column validation before sync to provide clear error messages when CSV structure is incorrect
 
