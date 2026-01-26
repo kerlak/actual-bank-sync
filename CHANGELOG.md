@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2025-01-26
+
+### Added
+- **ING app quick link**: When mobile 2FA validation is required, shows a clickable button to open the ING app directly. Uses `ingdirect://` URL scheme with fallback to website
+
 ## [1.1.3] - 2025-01-26
 
 ### Fixed
