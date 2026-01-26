@@ -109,6 +109,16 @@ def sync_csv_to_actual(
     print(f"[ACTUAL] Reading CSV: {csv_path}")
     df = pd.read_csv(csv_path)
     print(f"[ACTUAL] Found {len(df)} transactions")
+    print(f"[ACTUAL] Columns: {list(df.columns)}")
+
+    # Validate required columns
+    required_cols = ['Fecha Oper', 'Concepto', 'Descripción', 'Importe']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        return SyncResult(
+            success=False,
+            message=f"CSV missing required columns: {missing_cols}. Found: {list(df.columns)}"
+        )
 
     imported = 0
     skipped = 0

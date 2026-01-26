@@ -111,13 +111,60 @@ def download_movements(page: Page) -> str:
     return file_path
 
 
+def find_header_row(excel_path: str, expected_columns: list[str]) -> int:
+    """Find the row containing the header by searching for expected column names."""
+    # Read first 20 rows without header to search for the header row
+    df_preview = pd.read_excel(excel_path, header=None, nrows=20, engine='openpyxl')
+
+    for idx, row in df_preview.iterrows():
+        row_values = [str(v).strip() for v in row.values if pd.notna(v)]
+        # Check if any expected column is in this row
+        matches = sum(1 for col in expected_columns if any(col.lower() in v.lower() for v in row_values))
+        if matches >= 2:  # At least 2 matches indicates header row
+            print(f"[IBERCAJA] Found header at row {idx + 1}")
+            return idx
+
+    # Fallback to default if not found
+    print(f"[IBERCAJA] Header not auto-detected, using default row {EXCEL_HEADER_ROW + 1}")
+    return EXCEL_HEADER_ROW
+
+
 def convert_excel_to_csv(excel_path: str) -> str:
     """Convert downloaded Excel file to CSV format."""
-    print(f"[IBERCAJA] Processing Excel to CSV (header at row {EXCEL_HEADER_ROW + 1})...")
+    print(f"[IBERCAJA] Processing Excel to CSV...")
     csv_path = os.path.join(DOWNLOADS_FOLDER, OUTPUT_CSV_FILENAME)
 
-    df = pd.read_excel(excel_path, header=EXCEL_HEADER_ROW, engine='openpyxl')
-    print(f"[IBERCAJA] Data loaded: {len(df)} rows")
+    # Auto-detect header row
+    expected_cols = ['Fecha', 'Concepto', 'Descripción', 'Importe', 'Saldo']
+    header_row = find_header_row(excel_path, expected_cols)
+
+    df = pd.read_excel(excel_path, header=header_row, engine='openpyxl')
+    print(f"[IBERCAJA] Data loaded: {len(df)} rows, columns: {list(df.columns)}")
+
+    # Validate required columns exist
+    required = ['Fecha Oper', 'Concepto', 'Importe']
+    missing = [col for col in required if col not in df.columns]
+    if missing:
+        # Try to map common column variations
+        col_mapping = {}
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if 'fecha' in col_lower and 'oper' in col_lower:
+                col_mapping[col] = 'Fecha Oper'
+            elif 'fecha' in col_lower and 'valor' in col_lower:
+                col_mapping[col] = 'Fecha Valor'
+            elif col_lower == 'concepto':
+                col_mapping[col] = 'Concepto'
+            elif 'descrip' in col_lower:
+                col_mapping[col] = 'Descripción'
+            elif 'importe' in col_lower:
+                col_mapping[col] = 'Importe'
+            elif 'saldo' in col_lower:
+                col_mapping[col] = 'Saldo'
+
+        if col_mapping:
+            df = df.rename(columns=col_mapping)
+            print(f"[IBERCAJA] Renamed columns: {col_mapping}")
 
     df.to_csv(csv_path, index=False)
     print(f"[IBERCAJA] CSV file saved to: {csv_path}")

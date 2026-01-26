@@ -68,52 +68,30 @@ CSS_THEME = """
         color: #d4d4d4 !important;
         border: 1px solid #444 !important;
     }
+    /* Mask tel inputs like password fields */
+    input[type='tel'].masked-input {
+        -webkit-text-security: disc;
+        text-security: disc;
+    }
 """
 
 
 class ActivityIndicator:
-    """ASCII spinner to show activity and WebSocket connection status."""
-
-    # ASCII spinner frames (braille spinner)
-    FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+    """Simple activity indicator using put_text (WebSocket-friendly)."""
 
     def __init__(self):
         self.active = False
-        self.thread = None
-        self.frame_index = 0
 
     def start(self):
-        """Start the spinner animation."""
+        """Show activity indicator."""
         if self.active:
             return
         self.active = True
-        self.frame_index = 0
-        self.thread = threading.Thread(target=self._animate, daemon=True)
-        self.thread.start()
+        put_text("[...] processing")
 
     def stop(self):
-        """Stop the spinner animation."""
+        """Mark activity as stopped."""
         self.active = False
-        if self.thread:
-            self.thread.join(timeout=1)
-        try:
-            with use_scope('activity-indicator', clear=True):
-                pass  # Clear the indicator
-        except:
-            pass
-
-    def _animate(self):
-        """Animation loop that updates the spinner."""
-        while self.active:
-            try:
-                frame = self.FRAMES[self.frame_index]
-                with use_scope('activity-indicator', clear=True):
-                    put_html(f'<span style="color: #da7756; font-family: monospace;">{frame} active</span>')
-                self.frame_index = (self.frame_index + 1) % len(self.FRAMES)
-                time.sleep(0.1)  # Update 10 times per second
-            except Exception:
-                # Gracefully handle any scope errors
-                break
 
 
 # Global activity indicator instance
@@ -373,10 +351,10 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
         put_text(f"          {' '.join(pos_labels)}")
 
         blur_active_element()
-        # Use numeric keyboard on mobile while keeping password masking
+        # Use tel type for numeric keyboard on iOS, with CSS masking
         pin_digits = pyi_input(
-            type='password',
-            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+            type='tel',
+            other_html_attrs={'class': 'masked-input', 'autocomplete': 'off'}
         )
         return pin_digits
 
@@ -393,8 +371,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_dni
         state.ing_dni = pyi_input(
-            type='password',
-            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+            type='tel',
+            other_html_attrs={'class': 'masked-input', 'autocomplete': 'off'}
         )
         state.advance()
         return state.ing_dni
@@ -405,8 +383,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_dia
         state.ing_dia = pyi_input(
-            type='password',
-            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+            type='tel',
+            other_html_attrs={'autocomplete': 'off'}
         )
         state.advance()
         return state.ing_dia
@@ -417,8 +395,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_mes
         state.ing_mes = pyi_input(
-            type='password',
-            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+            type='tel',
+            other_html_attrs={'autocomplete': 'off'}
         )
         state.advance()
         return state.ing_mes
@@ -429,8 +407,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_ano
         state.ing_ano = pyi_input(
-            type='password',
-            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+            type='tel',
+            other_html_attrs={'autocomplete': 'off'}
         )
         state.advance()
         return state.ing_ano
@@ -442,8 +420,7 @@ def execute_ibercaja() -> None:
     """Execute Ibercaja download."""
     put_text("---")
     put_text("execution log:")
-    put_html('<div id="activity-indicator"></div>')  # Create scope for activity indicator
-
+    
     state.setup_ibercaja_queue()
     old_stdout = sys.stdout
 
@@ -472,8 +449,7 @@ def execute_ing() -> None:
     """Execute ING download."""
     put_text("---")
     put_text("execution log:")
-    put_html('<div id="activity-indicator"></div>')  # Create scope for activity indicator
-
+    
     state.setup_ing_queue()
     old_stdout = sys.stdout
 
@@ -676,8 +652,7 @@ def execute_sync_ibercaja() -> None:
     if not selected_file or not selected_account:
         return
 
-    put_html('<div id="activity-indicator"></div>')  # Create scope for activity indicator
-    activity_indicator.start()  # Start activity indicator
+        activity_indicator.start()  # Start activity indicator
 
     result = actual_sync.sync_csv_to_actual(
         csv_path=csv_path,
@@ -728,8 +703,7 @@ def execute_sync_ing(account_type: str) -> None:
     if not selected_file or not selected_account:
         return
 
-    put_html('<div id="activity-indicator"></div>')  # Create scope for activity indicator
-    activity_indicator.start()  # Start activity indicator
+        activity_indicator.start()  # Start activity indicator
 
     result = actual_sync.sync_csv_to_actual(
         csv_path=csv_path,
@@ -951,7 +925,7 @@ def inject_styles() -> None:
     (function() {
         let hiddenTime = null;
         let reconnectBanner = null;
-        const HIDDEN_THRESHOLD_MS = 5000; // 5 seconds threshold
+        let checkInterval = null;
 
         function createReconnectBanner() {
             if (reconnectBanner) return;
@@ -968,49 +942,51 @@ def inject_styles() -> None:
                 padding: 10px;
                 font-family: monospace;
                 z-index: 9999;
+                cursor: pointer;
             `;
-            reconnectBanner.innerHTML = 'Connection dropped. <strong>Reconnecting automatically...</strong>';
+            reconnectBanner.innerHTML = 'Connection interrupted. <strong>Tap to dismiss</strong> or wait for auto-reconnect...';
+            reconnectBanner.onclick = function() { removeReconnectBanner(); };
             document.body.insertBefore(reconnectBanner, document.body.firstChild);
 
             // Monitor WebSocket state and remove banner when connection is restored
-            const checkInterval = setInterval(function() {
-                if (window.WebIO && window.WebIO.session && window.WebIO.session._ws) {
-                    const ws = window.WebIO.session._ws;
-                    if (ws.readyState === WebSocket.OPEN) {
-                        removeReconnectBanner();
-                        clearInterval(checkInterval);
-                    }
+            if (checkInterval) clearInterval(checkInterval);
+            checkInterval = setInterval(function() {
+                // Check multiple ways to detect reconnection
+                const wsReady = window.WebIO && window.WebIO.session &&
+                               window.WebIO.session._ws &&
+                               window.WebIO.session._ws.readyState === WebSocket.OPEN;
+                if (wsReady) {
+                    removeReconnectBanner();
                 }
-            }, 500);
+            }, 1000);
 
-            // Clear interval after 60 seconds to avoid memory leak
-            setTimeout(function() { clearInterval(checkInterval); }, 60000);
+            // Clear interval after 60 seconds
+            setTimeout(function() {
+                if (checkInterval) clearInterval(checkInterval);
+                checkInterval = null;
+            }, 60000);
         }
 
         function removeReconnectBanner() {
-            if (reconnectBanner) {
-                reconnectBanner.remove();
-                reconnectBanner = null;
+            if (checkInterval) {
+                clearInterval(checkInterval);
+                checkInterval = null;
             }
+            const banner = document.getElementById('reconnect-banner');
+            if (banner) banner.remove();
+            reconnectBanner = null;
         }
 
         document.addEventListener('visibilitychange', function() {
             if (document.hidden) {
                 hiddenTime = Date.now();
             } else {
-                if (hiddenTime && (Date.now() - hiddenTime) > HIDDEN_THRESHOLD_MS) {
-                    // Page was hidden for more than threshold, connection might be dropped
-                    // Check if WebSocket is still alive by looking at PyWebIO's internal state
+                if (hiddenTime && (Date.now() - hiddenTime) > 5000) {
                     setTimeout(function() {
-                        // Try to detect if connection is dead
-                        // PyWebIO stores WebSocket in window.WebIO
-                        if (window.WebIO && window.WebIO.session) {
-                            const ws = window.WebIO.session._ws;
-                            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                                createReconnectBanner();
-                            }
-                        } else {
-                            // Can't detect WebSocket state, show banner as precaution
+                        const wsReady = window.WebIO && window.WebIO.session &&
+                                       window.WebIO.session._ws &&
+                                       window.WebIO.session._ws.readyState === WebSocket.OPEN;
+                        if (!wsReady) {
                             createReconnectBanner();
                         }
                     }, 500);
@@ -1018,15 +994,6 @@ def inject_styles() -> None:
                 hiddenTime = null;
             }
         });
-
-        // Also handle WebSocket close event directly if possible
-        if (window.WebIO && window.WebIO.session && window.WebIO.session._ws) {
-            const origOnClose = window.WebIO.session._ws.onclose;
-            window.WebIO.session._ws.onclose = function(event) {
-                createReconnectBanner();
-                if (origOnClose) origOnClose.call(this, event);
-            };
-        }
     })();
     </script>
     '''

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-01-26
+
+### Fixed
+- **Ibercaja Excel parsing**: Auto-detect header row instead of hardcoded row 6. Handles different Excel formats and maps column name variations
+- **Mobile numeric keyboard**: Changed from `type='password'` to `type='tel'` for DNI, dates and PIN inputs. iOS now shows numeric keyboard correctly
+- **Reconnection banner**: Banner now dismissible by tap, and properly removes itself when WebSocket reconnects
+- **CSV validation**: Added column validation before sync to provide clear error messages when CSV structure is incorrect
+
+### Changed
+- **Activity indicator**: Simplified to text-based indicator for better WebSocket compatibility
+- **Added TODO.md**: Roadmap file with planned improvements for version control
+
 ## [1.1.8] - 2026-01-26
 
 ### Fixed
