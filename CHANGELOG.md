@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2025-01-26
+
+### Fixed
+- **Mobile numeric keyboard**: ING PIN input now shows numeric keyboard on mobile while keeping password masking
+- **Mobile WebSocket reconnection**: Added detection for when user returns to app after switching (e.g., to bank app for 2FA). Shows reconnect banner if connection dropped after 5+ seconds away
+
 ## [1.1.2] - 2025-01-25
 
 ### Added
