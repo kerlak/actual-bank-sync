@@ -290,7 +290,11 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
         put_text(f"          {' '.join(pos_labels)}")
 
         blur_active_element()
-        pin_digits = pyi_input(type='password')
+        # Use numeric keyboard on mobile while keeping password masking
+        pin_digits = pyi_input(
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
+        )
         return pin_digits
 
     # Regular credential flow
@@ -826,9 +830,88 @@ def inject_styles() -> None:
     """Inject CSS styles and favicon to prevent FOUC (Flash of Unstyled Content)."""
     import base64
     favicon_b64 = base64.b64encode(FAVICON_SVG.encode()).decode()
+
+    # JavaScript to handle WebSocket reconnection on mobile Safari
+    # When user switches apps (e.g., to bank app for 2FA), the WebSocket may drop
+    reconnect_script = '''
+    <script>
+    (function() {
+        let hiddenTime = null;
+        let reconnectBanner = null;
+        const HIDDEN_THRESHOLD_MS = 5000; // 5 seconds threshold
+
+        function createReconnectBanner() {
+            if (reconnectBanner) return;
+            reconnectBanner = document.createElement('div');
+            reconnectBanner.id = 'reconnect-banner';
+            reconnectBanner.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: #da7756;
+                color: #191919;
+                text-align: center;
+                padding: 10px;
+                font-family: monospace;
+                z-index: 9999;
+                cursor: pointer;
+            `;
+            reconnectBanner.innerHTML = 'Connection may have dropped. <strong>Tap here to reconnect</strong>';
+            reconnectBanner.onclick = function() {
+                window.location.reload();
+            };
+            document.body.insertBefore(reconnectBanner, document.body.firstChild);
+        }
+
+        function removeReconnectBanner() {
+            if (reconnectBanner) {
+                reconnectBanner.remove();
+                reconnectBanner = null;
+            }
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                hiddenTime = Date.now();
+            } else {
+                if (hiddenTime && (Date.now() - hiddenTime) > HIDDEN_THRESHOLD_MS) {
+                    // Page was hidden for more than threshold, connection might be dropped
+                    // Check if WebSocket is still alive by looking at PyWebIO's internal state
+                    setTimeout(function() {
+                        // Try to detect if connection is dead
+                        // PyWebIO stores WebSocket in window.WebIO
+                        if (window.WebIO && window.WebIO.session) {
+                            const ws = window.WebIO.session._ws;
+                            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                                createReconnectBanner();
+                            }
+                        } else {
+                            // Can't detect WebSocket state, show banner as precaution
+                            createReconnectBanner();
+                        }
+                    }, 500);
+                }
+                hiddenTime = null;
+            }
+        });
+
+        // Also handle WebSocket close event directly if possible
+        if (window.WebIO && window.WebIO.session && window.WebIO.session._ws) {
+            const origOnClose = window.WebIO.session._ws.onclose;
+            window.WebIO.session._ws.onclose = function(event) {
+                createReconnectBanner();
+                if (origOnClose) origOnClose.call(this, event);
+            };
+        }
+    })();
+    </script>
+    '''
+
     put_html(f'''
         <style>{CSS_THEME}</style>
         <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{favicon_b64}">
+        {reconnect_script}
     ''')
 
 
