@@ -68,11 +68,6 @@ CSS_THEME = """
         color: #d4d4d4 !important;
         border: 1px solid #444 !important;
     }
-    /* Mask tel inputs like password fields */
-    input[type='tel'].masked-input {
-        -webkit-text-security: disc;
-        text-security: disc;
-    }
 """
 
 
@@ -351,10 +346,9 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
         put_text(f"          {' '.join(pos_labels)}")
 
         blur_active_element()
-        # Use text with inputmode for numeric keyboard, CSS handles masking
         pin_digits = pyi_input(
-            type='text',
-            other_html_attrs={'inputmode': 'numeric', 'class': 'masked-input', 'autocomplete': 'off'}
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
         )
         return pin_digits
 
@@ -371,8 +365,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_dni
         state.ing_dni = pyi_input(
-            type='text',
-            other_html_attrs={'inputmode': 'numeric', 'class': 'masked-input', 'autocomplete': 'off'}
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
         )
         state.advance()
         return state.ing_dni
@@ -383,8 +377,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_dia
         state.ing_dia = pyi_input(
-            type='text',
-            other_html_attrs={'inputmode': 'numeric', 'autocomplete': 'off'}
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
         )
         state.advance()
         return state.ing_dia
@@ -395,8 +389,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_mes
         state.ing_mes = pyi_input(
-            type='text',
-            other_html_attrs={'inputmode': 'numeric', 'autocomplete': 'off'}
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
         )
         state.advance()
         return state.ing_mes
@@ -407,8 +401,8 @@ def dynamic_getpass_ing(prompt: str = "") -> str:
             state.advance()
             return state.ing_ano
         state.ing_ano = pyi_input(
-            type='text',
-            other_html_attrs={'inputmode': 'numeric', 'autocomplete': 'off'}
+            type='password',
+            other_html_attrs={'inputmode': 'numeric', 'pattern': '[0-9]*'}
         )
         state.advance()
         return state.ing_ano

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.11] - 2026-01-27
+
+### Fixed
+- **Revert input changes**: Restored `type='password'` with `inputmode='numeric'` and `pattern='[0-9]*'` which was working correctly before
+
 ## [1.1.10] - 2026-01-27
 
 ### Fixed
@@ -14,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Ibercaja Excel parsing**: Auto-detect header row instead of hardcoded row 6. Handles different Excel formats and maps column name variations
-- **Mobile numeric keyboard**: Changed to `type='text'` with `inputmode='numeric'` for DNI, dates and PIN inputs. PyWebIO doesn't support `type='tel'`
 - **Reconnection banner**: Banner now dismissible by tap, and properly removes itself when WebSocket reconnects
 - **CSV validation**: Added column validation before sync to provide clear error messages when CSV structure is incorrect
 
