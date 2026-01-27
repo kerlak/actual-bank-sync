@@ -7,8 +7,9 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum, auto
-from typing import Optional
+from typing import Optional, Callable
 from unittest.mock import patch
 
 from pywebio import config, start_server
@@ -18,6 +19,177 @@ from playwright.sync_api import sync_playwright
 
 from banks import ibercaja, ing
 import actual_sync
+
+
+# =============================================================================
+# SCHEDULER FOR IBERCAJA AUTO-SYNC
+# =============================================================================
+
+class IbercajaScheduler:
+    """Scheduler for automatic Ibercaja download and sync."""
+
+    INTERVALS = {
+        '1h': 3600,
+        '3h': 10800,
+        '6h': 21600,
+        '12h': 43200,
+        '24h': 86400,
+    }
+
+    def __init__(self):
+        self.enabled = False
+        self.interval_key = None
+        self.timer: Optional[threading.Timer] = None
+        self.last_run: Optional[datetime] = None
+        self.next_run: Optional[datetime] = None
+        self.last_result: Optional[str] = None
+        self._lock = threading.Lock()
+
+    def start(self, interval_key: str, run_now: bool = False) -> bool:
+        """Start the scheduler with given interval."""
+        if interval_key not in self.INTERVALS:
+            return False
+
+        with self._lock:
+            self.stop()  # Stop any existing timer
+            self.enabled = True
+            self.interval_key = interval_key
+
+            if run_now:
+                # Run immediately in a thread, then schedule next
+                threading.Thread(target=self._run_and_schedule, daemon=True).start()
+            else:
+                self._schedule_next()
+
+            return True
+
+    def stop(self) -> None:
+        """Stop the scheduler."""
+        with self._lock:
+            self.enabled = False
+            self.interval_key = None
+            self.next_run = None
+            if self.timer:
+                self.timer.cancel()
+                self.timer = None
+
+    def _schedule_next(self) -> None:
+        """Schedule the next execution."""
+        if not self.enabled or not self.interval_key:
+            return
+
+        interval_seconds = self.INTERVALS[self.interval_key]
+        self.next_run = datetime.now() + timedelta(seconds=interval_seconds)
+
+        self.timer = threading.Timer(interval_seconds, self._run_and_schedule)
+        self.timer.daemon = True
+        self.timer.start()
+
+    def _run_and_schedule(self) -> None:
+        """Execute the sync and schedule next run."""
+        if not self.enabled:
+            return
+
+        self.last_run = datetime.now()
+        self.last_result = self._execute_sync()
+
+        # Schedule next run
+        with self._lock:
+            if self.enabled:
+                self._schedule_next()
+
+    def _execute_sync(self) -> str:
+        """Execute Ibercaja download and sync (background, no UI)."""
+        try:
+            print(f"[SCHEDULER] Starting Ibercaja auto-sync at {datetime.now()}")
+
+            # Check prerequisites
+            if not state.has_ibercaja_credentials():
+                return "ERROR: No Ibercaja credentials stored"
+
+            if not state.has_actual_credentials():
+                return "ERROR: No Actual Budget credentials stored"
+
+            if not state.has_saved_mapping('ibercaja'):
+                return "ERROR: No sync mapping configured"
+
+            # 1. Download movements
+            print("[SCHEDULER] Downloading movements...")
+
+            def auto_getpass(prompt: str = "") -> str:
+                """Auto-provide credentials from state."""
+                if 'Identification' in prompt or 'Code' in prompt or not prompt:
+                    if state.ibercaja_codigo:
+                        return state.ibercaja_codigo
+                if 'Key' in prompt or 'Clave' in prompt or 'clave' in prompt:
+                    if state.ibercaja_clave:
+                        return state.ibercaja_clave
+                # Fallback based on queue position
+                if hasattr(state, '_auto_queue_idx'):
+                    state._auto_queue_idx += 1
+                    if state._auto_queue_idx == 1:
+                        return state.ibercaja_codigo or ""
+                    else:
+                        return state.ibercaja_clave or ""
+                state._auto_queue_idx = 0
+                return state.ibercaja_codigo or ""
+
+            state._auto_queue_idx = 0
+
+            with patch('getpass.getpass', side_effect=auto_getpass):
+                with sync_playwright() as playwright:
+                    ibercaja.run(playwright)
+
+            print("[SCHEDULER] Download completed")
+
+            # 2. Sync to Actual Budget
+            print("[SCHEDULER] Syncing to Actual Budget...")
+
+            csv_path = actual_sync.get_latest_csv('ibercaja')
+            if not csv_path:
+                return "ERROR: No CSV found after download"
+
+            saved_file = state.get_saved_file('ibercaja')
+            saved_account = state.get_saved_account('ibercaja')
+            saved_encryption = state.get_saved_encryption(saved_file) if saved_file else None
+
+            result = actual_sync.sync_csv_to_actual(
+                csv_path=csv_path,
+                source='ibercaja',
+                base_url=ACTUAL_BUDGET_URL,
+                password=state.actual_password,
+                encryption_password=saved_encryption,
+                file_name=saved_file,
+                account_name=saved_account,
+                cert_path=ACTUAL_CERT_PATH
+            )
+
+            if result.success:
+                msg = f"OK: {result.imported} imported, {result.skipped} skipped"
+                print(f"[SCHEDULER] {msg}")
+                return msg
+            else:
+                print(f"[SCHEDULER] Sync failed: {result.message}")
+                return f"ERROR: {result.message}"
+
+        except Exception as e:
+            error_msg = f"ERROR: {str(e)}"
+            print(f"[SCHEDULER] {error_msg}")
+            return error_msg
+
+    def get_status(self) -> dict:
+        """Get current scheduler status."""
+        return {
+            'enabled': self.enabled,
+            'interval': self.interval_key,
+            'last_run': self.last_run.strftime('%Y-%m-%d %H:%M') if self.last_run else None,
+            'next_run': self.next_run.strftime('%Y-%m-%d %H:%M') if self.next_run else None,
+            'last_result': self.last_result,
+        }
+
+
+# Global scheduler instance
+ibercaja_scheduler = IbercajaScheduler()
 
 # Constants
 SERVER_PORT = 2077
@@ -780,14 +952,55 @@ def show_ibercaja() -> None:
     else:
         put_text("[--] no sync mapping saved")
 
+    # Scheduler status
+    put_text("")
+    sched_status = ibercaja_scheduler.get_status()
+    if sched_status['enabled']:
+        put_text(f"[ok] auto-sync: every {sched_status['interval']}")
+        if sched_status['next_run']:
+            put_text(f"     next run: {sched_status['next_run']}")
+        if sched_status['last_run']:
+            put_text(f"     last run: {sched_status['last_run']}")
+        if sched_status['last_result']:
+            put_text(f"     result: {sched_status['last_result']}")
+    else:
+        put_text("[--] auto-sync: disabled")
+
     put_text("")
     put_buttons(
         [
             {'label': '[start download]', 'value': 'download'},
             {'label': '[upload xlsx]', 'value': 'upload'},
             {'label': '[sync to actual]', 'value': 'sync'},
-            {'label': '[back]', 'value': 'back'}
         ],
+        onclick=handle_ibercaja_action
+    )
+    put_text("")
+
+    # Scheduler buttons
+    if sched_status['enabled']:
+        put_buttons(
+            [
+                {'label': '[stop auto-sync]', 'value': 'sched_stop'},
+                {'label': '[run now]', 'value': 'sched_run_now'},
+            ],
+            onclick=handle_ibercaja_action
+        )
+    else:
+        put_buttons(
+            [
+                {'label': '[auto-sync 1h]', 'value': 'sched_1h'},
+                {'label': '[auto-sync 3h]', 'value': 'sched_3h'},
+                {'label': '[auto-sync 6h]', 'value': 'sched_6h'},
+                {'label': '[auto-sync 12h]', 'value': 'sched_12h'},
+                {'label': '[auto-sync 24h]', 'value': 'sched_24h'},
+            ],
+            onclick=handle_ibercaja_action
+        )
+
+    put_text("")
+    put_buttons(
+        [{'label': '[back]', 'value': 'back'}],
         onclick=handle_ibercaja_action
     )
 
@@ -879,6 +1092,34 @@ def handle_ibercaja_action(action: str) -> None:
         execute_sync_ibercaja()
     elif action == 'back':
         show_menu()
+    # Scheduler actions
+    elif action == 'sched_stop':
+        ibercaja_scheduler.stop()
+        put_text("[SCHEDULER] Auto-sync stopped")
+        show_ibercaja()
+    elif action == 'sched_run_now':
+        put_text("[SCHEDULER] Running sync now...")
+        threading.Thread(target=ibercaja_scheduler._run_and_schedule, daemon=True).start()
+        put_text("[SCHEDULER] Sync started in background")
+    elif action.startswith('sched_'):
+        interval = action.replace('sched_', '')
+        # Check prerequisites before starting
+        if not state.has_ibercaja_credentials():
+            put_text("[ERROR] Store Ibercaja credentials first (run download once)")
+            return
+        if not state.has_actual_credentials():
+            put_text("[ERROR] Store Actual Budget password first (run sync once)")
+            return
+        if not state.has_saved_mapping('ibercaja'):
+            put_text("[ERROR] Configure sync mapping first (run sync once)")
+            return
+
+        if ibercaja_scheduler.start(interval, run_now=True):
+            put_text(f"[SCHEDULER] Auto-sync enabled: every {interval}")
+            put_text("[SCHEDULER] First sync running now...")
+            show_ibercaja()
+        else:
+            put_text(f"[ERROR] Invalid interval: {interval}")
 
 
 def handle_ing_action(action: str) -> None:

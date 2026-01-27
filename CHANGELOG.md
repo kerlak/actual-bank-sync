@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-27
+
+### Added
+- **Ibercaja auto-sync scheduler**: Schedule automatic download and sync to Actual Budget at configurable intervals (1h, 3h, 6h, 12h, 24h)
+- Shows scheduler status: next run time, last run time, and last result
+- Prerequisites check: requires stored credentials and sync mapping before enabling
+- "Run now" option to trigger immediate sync while scheduler is active
+
 ## [1.1.11] - 2026-01-27
 
 ### Fixed
