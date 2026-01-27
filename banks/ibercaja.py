@@ -82,17 +82,131 @@ def handle_blocking_elements(page: Page) -> None:
             break
 
 
+def debug_page_state(page: Page, context: str) -> None:
+    """Print debug info about current page state."""
+    try:
+        print(f"[DEBUG:{context}] URL: {page.url}")
+        print(f"[DEBUG:{context}] Title: {page.title()}")
+    except Exception as e:
+        print(f"[DEBUG:{context}] Error getting state: {str(e)[:50]}")
+
+
 def download_movements(page: Page) -> str:
     """Navigate to movements and download Excel file."""
+    import time
+
     print("[IBERCAJA] Waiting for table to load...")
-    table_row = page.locator(".ui-table__row").first
-    table_row.wait_for(state="visible", timeout=60000)
+    debug_page_state(page, "before_table")
+
+    # Wait a bit for page to stabilize after login
+    time.sleep(2)
+
+    # Check for additional modals/popups that might have appeared
+    print("[IBERCAJA] Checking for additional popups...")
+    page.evaluate("""
+        // Remove common popup elements
+        document.querySelectorAll('.modal, .popup, [class*="modal"], [class*="popup"], [class*="dialog"]').forEach(el => {
+            console.log('Removing popup:', el.className);
+            el.remove();
+        });
+        // Click any "close" or "accept" buttons
+        document.querySelectorAll('button').forEach(btn => {
+            const text = btn.textContent?.toLowerCase() || '';
+            if (text.includes('cerrar') || text.includes('aceptar') || text.includes('continuar') || text.includes('entendido')) {
+                console.log('Clicking button:', text);
+                btn.click();
+            }
+        });
+    """)
+
+    time.sleep(1)
+
+    # Try multiple selectors for the accounts table
+    table_selectors = [
+        ".ui-table__row",
+        "[class*='table'] [class*='row']",
+        "table tbody tr",
+        "[class*='account']",
+        "[class*='producto']",
+        "[class*='cuenta']",
+    ]
+
+    table_row = None
+    for selector in table_selectors:
+        try:
+            locator = page.locator(selector).first
+            if locator.is_visible(timeout=3000):
+                table_row = locator
+                print(f"[IBERCAJA] Found table with selector: {selector}")
+                break
+        except Exception:
+            continue
+
+    if not table_row:
+        # Debug: list what's on the page
+        print("[IBERCAJA] Table not found. Debugging page content...")
+        debug_page_state(page, "no_table")
+
+        # Try to find any clickable elements
+        try:
+            buttons = page.get_by_role("button").all()
+            print(f"[DEBUG] Found {len(buttons)} buttons")
+            for i, btn in enumerate(buttons[:10]):
+                try:
+                    text = btn.text_content()[:40] if btn.text_content() else "N/A"
+                    print(f"[DEBUG]   Button {i}: {text}")
+                except Exception:
+                    pass
+
+            links = page.get_by_role("link").all()
+            print(f"[DEBUG] Found {len(links)} links")
+            for i, link in enumerate(links[:10]):
+                try:
+                    text = link.text_content()[:40] if link.text_content() else "N/A"
+                    print(f"[DEBUG]   Link {i}: {text}")
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[DEBUG] Error listing elements: {e}")
+
+        # Last resort: wait longer for the original selector
+        print("[IBERCAJA] Trying extended wait for .ui-table__row...")
+        table_row = page.locator(".ui-table__row").first
+        table_row.wait_for(state="visible", timeout=60000)
+
     print("[IBERCAJA] Table visible, clicking row to select account...")
     table_row.click()
     print("[IBERCAJA] Table row clicked")
 
+    # Wait for account details to load
+    time.sleep(2)
+
     print("[IBERCAJA] Looking for download button...")
-    page.get_by_role("button", name="\ue911").click()
+    # Try multiple approaches for download button
+    download_btn = None
+    try:
+        download_btn = page.get_by_role("button", name="\ue911")
+        if not download_btn.is_visible(timeout=3000):
+            download_btn = None
+    except Exception:
+        pass
+
+    if not download_btn:
+        # Try alternative selectors
+        for selector in ["[class*='download']", "[class*='export']", "button[title*='descargar']", "button[title*='exportar']"]:
+            try:
+                btn = page.locator(selector).first
+                if btn.is_visible(timeout=1000):
+                    download_btn = btn
+                    print(f"[IBERCAJA] Found download button with: {selector}")
+                    break
+            except Exception:
+                continue
+
+    if not download_btn:
+        download_btn = page.get_by_role("button", name="\ue911")
+
+    download_btn.click()
     print("[IBERCAJA] Download button clicked, waiting for download...")
 
     with page.expect_download() as download_info:
