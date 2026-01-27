@@ -29,6 +29,7 @@ class IbercajaScheduler:
     """Scheduler for automatic Ibercaja download and sync."""
 
     INTERVALS = {
+        '5m': 300,      # 5 minutes for testing
         '1h': 3600,
         '3h': 10800,
         '6h': 21600,
@@ -43,44 +44,57 @@ class IbercajaScheduler:
         self.last_run: Optional[datetime] = None
         self.next_run: Optional[datetime] = None
         self.last_result: Optional[str] = None
-        self._lock = threading.Lock()
+        self.running = False  # Track if currently executing
 
     def start(self, interval_key: str, run_now: bool = False) -> bool:
         """Start the scheduler with given interval."""
+        print(f"[SCHEDULER] Starting with interval: {interval_key}, run_now: {run_now}")
+
         if interval_key not in self.INTERVALS:
+            print(f"[SCHEDULER] Invalid interval: {interval_key}")
             return False
 
-        with self._lock:
-            self.stop()  # Stop any existing timer
-            self.enabled = True
-            self.interval_key = interval_key
+        # Stop any existing timer first (without lock to avoid deadlock)
+        self._stop_timer()
 
-            if run_now:
-                # Run immediately in a thread, then schedule next
-                threading.Thread(target=self._run_and_schedule, daemon=True).start()
-            else:
-                self._schedule_next()
+        self.enabled = True
+        self.interval_key = interval_key
+        print(f"[SCHEDULER] Enabled: {self.enabled}, interval: {self.interval_key}")
 
-            return True
+        if run_now:
+            # Run immediately in a thread, then schedule next
+            print("[SCHEDULER] Starting immediate run in thread...")
+            threading.Thread(target=self._run_and_schedule, daemon=True).start()
+        else:
+            self._schedule_next()
+
+        return True
+
+    def _stop_timer(self) -> None:
+        """Stop the timer without changing enabled state."""
+        if self.timer:
+            self.timer.cancel()
+            self.timer = None
 
     def stop(self) -> None:
-        """Stop the scheduler."""
-        with self._lock:
-            self.enabled = False
-            self.interval_key = None
-            self.next_run = None
-            if self.timer:
-                self.timer.cancel()
-                self.timer = None
+        """Stop the scheduler completely."""
+        print("[SCHEDULER] Stopping scheduler")
+        self.enabled = False
+        self.interval_key = None
+        self.next_run = None
+        self._stop_timer()
 
     def _schedule_next(self) -> None:
         """Schedule the next execution."""
         if not self.enabled or not self.interval_key:
+            print(f"[SCHEDULER] Cannot schedule: enabled={self.enabled}, interval={self.interval_key}")
             return
 
         interval_seconds = self.INTERVALS[self.interval_key]
         self.next_run = datetime.now() + timedelta(seconds=interval_seconds)
+        print(f"[SCHEDULER] Next run scheduled for: {self.next_run}")
 
+        self._stop_timer()  # Cancel any existing timer
         self.timer = threading.Timer(interval_seconds, self._run_and_schedule)
         self.timer.daemon = True
         self.timer.start()
@@ -88,15 +102,20 @@ class IbercajaScheduler:
     def _run_and_schedule(self) -> None:
         """Execute the sync and schedule next run."""
         if not self.enabled:
+            print("[SCHEDULER] Skipping run - scheduler disabled")
             return
 
+        self.running = True
         self.last_run = datetime.now()
+        print(f"[SCHEDULER] Executing at {self.last_run}")
+
         self.last_result = self._execute_sync()
+        self.running = False
+        print(f"[SCHEDULER] Execution result: {self.last_result}")
 
         # Schedule next run
-        with self._lock:
-            if self.enabled:
-                self._schedule_next()
+        if self.enabled:
+            self._schedule_next()
 
     def _execute_sync(self) -> str:
         """Execute Ibercaja download and sync (background, no UI)."""
@@ -179,12 +198,26 @@ class IbercajaScheduler:
 
     def get_status(self) -> dict:
         """Get current scheduler status."""
+        # Calculate time remaining
+        time_remaining = None
+        if self.next_run and self.enabled:
+            delta = self.next_run - datetime.now()
+            if delta.total_seconds() > 0:
+                mins, secs = divmod(int(delta.total_seconds()), 60)
+                hours, mins = divmod(mins, 60)
+                if hours > 0:
+                    time_remaining = f"{hours}h {mins}m"
+                else:
+                    time_remaining = f"{mins}m {secs}s"
+
         return {
             'enabled': self.enabled,
             'interval': self.interval_key,
-            'last_run': self.last_run.strftime('%Y-%m-%d %H:%M') if self.last_run else None,
-            'next_run': self.next_run.strftime('%Y-%m-%d %H:%M') if self.next_run else None,
+            'last_run': self.last_run.strftime('%Y-%m-%d %H:%M:%S') if self.last_run else None,
+            'next_run': self.next_run.strftime('%Y-%m-%d %H:%M:%S') if self.next_run else None,
+            'time_remaining': time_remaining,
             'last_result': self.last_result,
+            'running': self.running,
         }
 
 
@@ -956,7 +989,11 @@ def show_ibercaja() -> None:
     put_text("")
     sched_status = ibercaja_scheduler.get_status()
     if sched_status['enabled']:
-        put_text(f"[ok] auto-sync: every {sched_status['interval']}")
+        status_icon = "[>>]" if sched_status['running'] else "[ok]"
+        status_text = "running now..." if sched_status['running'] else f"every {sched_status['interval']}"
+        put_text(f"{status_icon} auto-sync: {status_text}")
+        if sched_status['time_remaining'] and not sched_status['running']:
+            put_text(f"     next in: {sched_status['time_remaining']}")
         if sched_status['next_run']:
             put_text(f"     next run: {sched_status['next_run']}")
         if sched_status['last_run']:
@@ -965,6 +1002,11 @@ def show_ibercaja() -> None:
             put_text(f"     result: {sched_status['last_result']}")
     else:
         put_text("[--] auto-sync: disabled")
+        # Show last execution info even when disabled
+        if sched_status['last_run']:
+            put_text(f"     last run: {sched_status['last_run']}")
+        if sched_status['last_result']:
+            put_text(f"     result: {sched_status['last_result']}")
 
     put_text("")
     put_buttons(
@@ -989,14 +1031,16 @@ def show_ibercaja() -> None:
     else:
         put_buttons(
             [
-                {'label': '[auto-sync 1h]', 'value': 'sched_1h'},
-                {'label': '[auto-sync 3h]', 'value': 'sched_3h'},
-                {'label': '[auto-sync 6h]', 'value': 'sched_6h'},
-                {'label': '[auto-sync 12h]', 'value': 'sched_12h'},
-                {'label': '[auto-sync 24h]', 'value': 'sched_24h'},
+                {'label': '[5m]', 'value': 'sched_5m'},
+                {'label': '[1h]', 'value': 'sched_1h'},
+                {'label': '[3h]', 'value': 'sched_3h'},
+                {'label': '[6h]', 'value': 'sched_6h'},
+                {'label': '[12h]', 'value': 'sched_12h'},
+                {'label': '[24h]', 'value': 'sched_24h'},
             ],
             onclick=handle_ibercaja_action
         )
+        put_text("     ^ auto-sync intervals")
 
     put_text("")
     put_buttons(

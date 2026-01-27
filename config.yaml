@@ -1,6 +1,6 @@
 name: "Banking Hub"
 description: "Multi-bank movements downloader with Actual Budget sync (Ibercaja & ING)"
-version: "1.2.1"
+version: "1.2.2"
 slug: "banking_hub"
 url: "https://github.com/juancar/banking-hub"
 
