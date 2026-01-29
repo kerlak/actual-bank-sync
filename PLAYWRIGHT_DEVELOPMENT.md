@@ -1,34 +1,53 @@
 # Playwright Development Guide
 
-Scripts para desarrollar y probar scrapers de Playwright en el mismo entorno que producción.
+Scripts para desarrollar y probar scrapers de Playwright.
 
-## Requisitos previos
+## Opción 1: Codegen Local (Recomendado para macOS)
 
-### macOS
+La forma más simple - ejecuta Playwright directamente en tu Mac:
+
 ```bash
-# Instalar XQuartz (necesario para mostrar el navegador)
+./playwright-codegen-local.sh
+```
+
+Esto:
+- Instala Playwright en tu Python local (si no está)
+- Abre el navegador nativamente
+- Graba tus acciones y genera código
+- **No requiere XQuartz ni contenedores**
+
+### Primera vez solamente:
+```bash
+# Instalar Playwright
+pip3 install playwright==1.56.0 playwright-stealth==2.0.0
+
+# Instalar navegador Chromium
+python3 -m playwright install chromium
+```
+
+## Opción 2: Codegen en Contenedor (Linux o testing exacto)
+
+Si necesitas el entorno exacto de producción:
+
+### macOS - Requisitos previos
+```bash
+# Instalar XQuartz
 brew install --cask xquartz
 
-# Abrir XQuartz
-open -a XQuartz
+# Configurar XQuartz
+./setup-xquartz.sh
 
-# En XQuartz > Preferences > Security:
-# ✓ Marcar "Allow connections from network clients"
-
-# Permitir conexiones desde localhost
+# En otra terminal:
+export DISPLAY=:0
 xhost +localhost
 ```
 
 ### Linux
 ```bash
-# Permitir conexiones X11 desde root
 xhost +local:root
 ```
 
-## Scripts disponibles
-
-### 1. Codegen - Grabar nueva integración
-
+### Ejecutar codegen
 ```bash
 ./playwright-codegen.sh
 ```
