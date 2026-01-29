@@ -14,6 +14,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv-playwright/
 ENV/
 build/
 develop-eggs/

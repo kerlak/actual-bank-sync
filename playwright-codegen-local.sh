@@ -4,28 +4,43 @@
 
 set -e
 
-echo "[*] Installing Playwright locally if needed..."
+VENV_DIR=".venv-playwright"
 
-# Check if playwright is installed
-if ! python3 -c "import playwright" 2>/dev/null; then
-    echo "[*] Installing playwright..."
-    pip3 install playwright==1.56.0 playwright-stealth==2.0.0
+echo "[*] Setting up Python virtual environment..."
+
+# Create venv if it doesn't exist
+if [ ! -d "$VENV_DIR" ]; then
+    echo "[*] Creating virtual environment..."
+    python3 -m venv "$VENV_DIR"
+fi
+
+# Activate venv
+source "$VENV_DIR/bin/activate"
+
+# Check if playwright is installed in venv
+if ! python -c "import playwright" 2>/dev/null; then
+    echo "[*] Installing playwright in virtual environment..."
+    pip install --quiet playwright==1.56.0 playwright-stealth==2.0.0
 fi
 
 # Install browsers if needed
-if [ ! -d "$HOME/Library/Caches/ms-playwright" ]; then
-    echo "[*] Installing Chromium..."
-    python3 -m playwright install chromium
+PLAYWRIGHT_CACHE="$HOME/Library/Caches/ms-playwright"
+if [ ! -d "$PLAYWRIGHT_CACHE" ] || [ -z "$(ls -A $PLAYWRIGHT_CACHE 2>/dev/null)" ]; then
+    echo "[*] Installing Chromium browser..."
+    playwright install chromium
 fi
 
 echo ""
-echo "[*] Launching Playwright codegen (local)..."
+echo "[*] Launching Playwright codegen..."
 echo "[*] Browser will open - interact with the site to record actions"
 echo "[*] Press Ctrl+C when done to generate the code"
 echo ""
 
-# Run codegen locally
-python3 -m playwright codegen https://www.ibercaja.es/
+# Run codegen
+playwright codegen https://www.ibercaja.es/
+
+# Deactivate venv
+deactivate
 
 echo ""
 echo "[*] Done! Copy the generated code to banks/ibercaja.py"
