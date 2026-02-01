@@ -5,6 +5,11 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-02-01
+
+### Cambiado
+- Puerto por defecto cambiado de 8080 a 2078 (evita conflictos)
+
 ## [1.0.3] - 2026-02-01
 
 ### Corregido

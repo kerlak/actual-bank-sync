@@ -21,7 +21,7 @@ RUN chmod +x run.sh
 # Environment variables
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8080
+EXPOSE 2078
 
 # Start application
 CMD ["./run.sh"]

@@ -1,6 +1,6 @@
 name: "Actual Budget REST API"
 description: "REST API para Actual Budget - Widget iOS y aplicaciones de terceros"
-version: "1.0.3"
+version: "1.0.4"
 slug: "actual_budget_api"
 url: "https://github.com/kerlak/actual-bank-sync"
 
@@ -13,13 +13,13 @@ startup: "application"
 boot: "auto"
 
 ports:
-  8080/tcp: 8080
+  2078/tcp: 2078
 
 ports_description:
-  8080/tcp: "REST API Port"
+  2078/tcp: "REST API Port"
 
 options:
-  api_port: 8080
+  api_port: 2078
   log_level: "info"
 
 schema:
