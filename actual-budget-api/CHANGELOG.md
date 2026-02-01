@@ -5,6 +5,13 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-02-01
+
+### Corregido
+- Eliminada dependencia de bashio en run.sh
+- Cambiado a bash puro para evitar error s6-overlay-suexec
+- Logs ahora usan echo en lugar de bashio::log.info
+
 ## [1.0.1] - 2026-02-01
 
 ### Corregido

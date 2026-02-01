@@ -1,4 +1,4 @@
-#!/usr/bin/env bashio
+#!/bin/bash
 set -e
 
 CONFIG_PATH="/data/options.json"
@@ -7,9 +7,9 @@ CONFIG_PATH="/data/options.json"
 API_PORT=$(jq --raw-output '.api_port // 8080' $CONFIG_PATH)
 LOG_LEVEL=$(jq --raw-output '.log_level // "info"' $CONFIG_PATH)
 
-bashio::log.info "Starting Actual Budget REST API..."
-bashio::log.info "API Port: ${API_PORT}"
-bashio::log.info "Log Level: ${LOG_LEVEL}"
+echo "[INFO] Starting Actual Budget REST API..."
+echo "[INFO] API Port: ${API_PORT}"
+echo "[INFO] Log Level: ${LOG_LEVEL}"
 
 # Start the REST API server
 cd /app
