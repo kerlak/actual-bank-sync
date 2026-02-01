@@ -1,6 +1,6 @@
 name: "Actual Budget REST API"
 description: "REST API para Actual Budget - Widget iOS y aplicaciones de terceros"
-version: "1.0.4"
+version: "1.0.5"
 slug: "actual_budget_api"
 url: "https://github.com/kerlak/actual-bank-sync"
 

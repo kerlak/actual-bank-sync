@@ -1,8 +1,8 @@
 # Use Python Alpine directly (no s6-overlay)
 FROM python:3.12-alpine
 
-# Install jq and Python dependencies
-RUN apk add --no-cache jq \
+# Install bash, jq and Python dependencies
+RUN apk add --no-cache bash jq \
     && pip install --no-cache-dir \
         fastapi \
         uvicorn \
