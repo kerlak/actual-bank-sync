@@ -1,4 +1,10 @@
-# Banking Hub - Actual Budget Sync
+# Actual Budget Add-ons Repository
+
+Home Assistant add-ons para Actual Budget: automatización bancaria y REST API.
+
+## Add-ons Disponibles
+
+### 1. Banking Hub - Actual Budget Sync
 
 Multi-bank movements downloader with Actual Budget synchronization for Spanish banks (Ibercaja & ING).
 
@@ -14,7 +20,7 @@ Multi-bank movements downloader with Actual Budget synchronization for Spanish b
 
 **RECOMMENDED**: Use the manual upload feature instead of automated scraping to avoid potential ToS violations.
 
-## Features
+#### Features
 
 - **Automated bank scraping**: Download movements from Ibercaja and ING automatically
 - **Manual upload support**: Upload Excel files manually if needed
@@ -25,30 +31,79 @@ Multi-bank movements downloader with Actual Budget synchronization for Spanish b
 - **Web UI**: Clean, terminal-style interface on port 2077
 - **Home Assistant add-on**: Easy integration with Home Assistant
 
-## Supported Banks
+#### Supported Banks
 
 - **Ibercaja**: Automatic Excel download via Playwright
 - **ING**: Both Nómina and Naranja accounts with anti-bot protection
 
+---
+
+### 2. Actual Budget REST API
+
+REST API para Actual Budget que permite integración con aplicaciones de terceros, widgets de iOS y otras herramientas.
+
+📱 **[Ver documentación completa →](actual-budget-api/README.md)**
+
+#### Features
+
+- **REST API completa**: Endpoints para validación, cuentas, presupuesto y transacciones
+- **Widget de iOS**: Visualiza tu presupuesto en tu iPhone
+- **Integraciones personalizadas**: Conecta Actual Budget con otras apps
+- **Puerto configurable**: Evita conflictos con otros servicios (default: 8080)
+- **Multi-arquitectura**: Soporte para amd64, aarch64, armv7
+- **Sin autenticación adicional**: Usa las credenciales de Actual Budget
+
+#### Endpoints Disponibles
+
+- `POST /api/validate` - Validar conexión y listar archivos
+- `POST /api/accounts` - Obtener cuentas con saldos
+- `POST /api/budget` - Presupuesto mensual por categorías
+- `POST /api/transactions` - Transacciones por categoría
+
+---
+
 ## Installation
+
+### Home Assistant Add-ons
+
+1. **Add this repository** to your Home Assistant:
+   - Settings → Add-ons → Add-on Store → ⋮ → Repositories
+   - Add repository: `https://github.com/kerlak/actual-bank-sync`
+
+2. **Install the add-on you need**:
+   - **Banking Hub**: For automated bank syncing
+   - **Actual Budget REST API**: For iOS widget and integrations
+
+3. **Configure and start** the add-on
+
+#### Banking Hub Configuration
+
+- `actual_budget_host`: Hostname of your Actual Budget server (e.g., `actual.local`)
+- `actual_budget_ip`: IP address of your Actual Budget server
+- `actual_budget_file_id`: (Optional) Default budget file name or ID
+- Access the web UI on port **2077**
+
+#### REST API Configuration
+
+- `api_port`: Puerto de la API (default: 8080)
+- `log_level`: Nivel de logging (info, debug, warning, error)
+- Access the API on port **8080** (or configured port)
 
 ### Standalone (Docker)
 
+#### Banking Hub
 ```bash
 docker build -t banking-hub .
 docker run -p 2077:2077 banking-hub
 ```
 
-### Home Assistant Add-on
-
-1. Add this repository to your Home Assistant add-on store
-2. Install "Banking Hub"
-3. Configure Actual Budget settings:
-   - `actual_budget_host`: Hostname of your Actual Budget server (e.g., `actual.local`)
-   - `actual_budget_ip`: IP address of your Actual Budget server
-   - `actual_budget_file_id`: (Optional) Default budget file name or ID
-4. Start the add-on
-5. Access the web UI on port 2077
+#### REST API
+```bash
+docker build -t actual-budget-api \
+  --build-arg BUILD_FROM=python:3.11-alpine \
+  actual-budget-api/
+docker run -p 8080:8080 actual-budget-api
+```
 
 ## Usage
 
@@ -128,6 +183,46 @@ To change these defaults, simply select different options during sync or use the
 - All credentials are cleared on app restart
 - SSL verification is disabled for self-signed certificates (Actual Budget servers often use self-signed certs)
 
+## iOS Widget
+
+**NEW**: Widget de iOS para visualizar tu balance mensual por categorías directamente en tu iPhone.
+
+### Características del Widget
+
+- Muestra el balance del mes actual por categorías
+- Tres tamaños: Pequeño (balance total), Mediano (top 5 categorías), Grande (todas las categorías)
+- Actualización automática cada 15 minutos
+- Almacenamiento seguro de credenciales en Keychain
+- Compatible con iOS 17.0+ (iPhone 15 y posteriores)
+
+### Inicio Rápido
+
+1. Inicia el servidor REST API:
+   ```bash
+   ./start_rest_api.sh
+   ```
+
+2. Sigue la guía de instalación en `ios-widget/QUICKSTART.md`
+
+3. Configura el widget con:
+   - URL del servidor (ej: `http://192.168.1.100:8080`)
+   - Contraseña de Actual Budget
+   - Nombre del archivo de presupuesto
+   - Clave de cifrado (opcional)
+
+### Documentación del Widget
+
+- **[QUICKSTART.md](ios-widget/QUICKSTART.md)**: Inicio rápido en 5 minutos
+- **[INSTALLATION.md](ios-widget/INSTALLATION.md)**: Guía completa de instalación
+- **[README.md](ios-widget/README.md)**: Documentación detallada
+
+### Requisitos
+
+- macOS con Xcode 15.0+
+- iPhone con iOS 17.0+ (iPhone 15 y posteriores)
+- Cuenta de desarrollador de Apple
+- Python 3.8+ con FastAPI
+
 ## Troubleshooting
 
 ### "No budget files found"
@@ -143,6 +238,12 @@ To change these defaults, simply select different options during sync or use the
 ### Home Assistant: File not pre-selected
 - Ensure `actual_budget_file_id` in add-on config matches the exact file name in Actual Budget
 - File names are case-sensitive
+
+### iOS Widget: "No se puede conectar al servidor"
+- Ensure the REST API is running (`./start_rest_api.sh`)
+- Verify your iPhone is on the same WiFi network as your Mac
+- Use your Mac's local IP address (not localhost)
+- Check firewall settings on your Mac
 
 ## License
 

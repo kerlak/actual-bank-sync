@@ -1,0 +1,96 @@
+name: Build Actual Budget REST API Add-on
+
+on:
+  push:
+    tags:
+      - 'api-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: true
+
+jobs:
+  information:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_args: ${{ steps.flags.outputs.build_args }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/api-v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get build args
+        id: flags
+        run: |
+          echo "build_args=--all" >> $GITHUB_OUTPUT
+
+  build:
+    needs: information
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, aarch64, armv7]
+    name: Build ${{ matrix.arch }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build add-on
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --${{ matrix.arch }} \
+            --target actual-budget-api \
+            --docker-hub ghcr.io/${{ github.repository_owner }} \
+            --image actual-budget-api-{arch} \
+            --version ${{ needs.information.outputs.version }}
+
+  publish:
+    needs: [information, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: api-v${{ needs.information.outputs.version }}
+          release_name: Actual Budget REST API v${{ needs.information.outputs.version }}
+          body: |
+            ## Actual Budget REST API v${{ needs.information.outputs.version }}
+
+            ### Installation
+
+            Add this repository to your Home Assistant:
+            ```
+            https://github.com/${{ github.repository }}
+            ```
+
+            Then install "Actual Budget REST API" from the Add-on Store.
+
+            ### Docker Images
+
+            - `ghcr.io/${{ github.repository_owner }}/actual-budget-api-amd64:${{ needs.information.outputs.version }}`
+            - `ghcr.io/${{ github.repository_owner }}/actual-budget-api-aarch64:${{ needs.information.outputs.version }}`
+            - `ghcr.io/${{ github.repository_owner }}/actual-budget-api-armv7:${{ needs.information.outputs.version }}`
+
+            See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/actual-budget-api/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
