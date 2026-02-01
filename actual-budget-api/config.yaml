@@ -28,5 +28,3 @@ schema:
 
 environment:
   PYTHONUNBUFFERED: "1"
-
-image: "ghcr.io/kerlak/actual-budget-api-{arch}"

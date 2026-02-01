@@ -50,7 +50,9 @@ git commit -m "chore(api): release v1.0.0"
 git push origin main
 ```
 
-### 3. Crear release en GitHub
+### 3. Crear release en GitHub (Opcional)
+
+Crear un release en GitHub es opcional pero recomendado para documentar cambios:
 
 #### Opción A: Usando GitHub CLI
 
@@ -68,13 +70,7 @@ gh release create api-v1.0.0 \
 4. Description: Copia el contenido del CHANGELOG
 5. Click "Publish release"
 
-### 4. Build automático (GitHub Actions)
-
-El workflow de GitHub Actions se ejecutará automáticamente cuando crees el tag y:
-
-1. Construirá imágenes Docker para todas las arquitecturas (amd64, aarch64, armv7)
-2. Publicará las imágenes en GitHub Container Registry
-3. Hará disponible el add-on para instalación en Home Assistant
+**Nota:** Home Assistant construye las imágenes localmente desde el Dockerfile del repositorio, por lo que no necesitas GitHub Actions ni publicar imágenes en registries externos.
 
 ## Build Manual (Desarrollo Local)
 

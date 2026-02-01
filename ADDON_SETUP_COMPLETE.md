@@ -54,39 +54,20 @@ git log --oneline -3
 git push origin main
 ```
 
-### 2. Crear el Primer Release
+### 2. Crear Release (Opcional)
 
-#### Opción A: GitHub CLI (recomendado)
+Crear un release en GitHub es opcional pero ayuda a documentar cambios:
 
 ```bash
-# Crear tag y release
+# Opcional: Crear release
 gh release create api-v1.0.0 \
   --title "Actual Budget REST API v1.0.0" \
   --notes-file actual-budget-api/CHANGELOG.md
 ```
 
-#### Opción B: GitHub Web
+**Nota:** El add-on funciona igual que "Banking Hub" - Home Assistant construye las imágenes localmente desde el Dockerfile cuando los usuarios lo instalan.
 
-1. Ve a https://github.com/kerlak/actual-bank-sync/releases/new
-2. **Tag:** `api-v1.0.0`
-3. **Release title:** `Actual Budget REST API v1.0.0`
-4. **Description:** Copia el contenido de `actual-budget-api/CHANGELOG.md`
-5. Click **"Publish release"**
-
-**¿Qué pasará automáticamente?**
-- ✅ GitHub Actions construirá imágenes Docker para amd64, aarch64, armv7
-- ✅ Se publicarán en GitHub Container Registry (GHCR)
-- ✅ El add-on estará disponible para instalación en Home Assistant
-
-### 3. Configurar GitHub Container Registry (GHCR)
-
-Para que las imágenes Docker sean públicas:
-
-1. Ve a https://github.com/kerlak?tab=packages
-2. Busca `actual-budget-api-amd64`, `actual-budget-api-aarch64`, `actual-budget-api-armv7`
-3. Click en cada uno → **Package settings** → **Change visibility** → **Public**
-
-### 4. Instalar en Home Assistant
+### 3. Instalar en Home Assistant
 
 Una vez publicado el release:
 

@@ -24,7 +24,9 @@ Guía rápida de 5 minutos para tener tu API funcionando.
 1. Busca **"Actual Budget REST API"** en el Add-on Store
 2. Click en el add-on
 3. Click **Install**
-4. Espera a que termine la instalación (puede tardar unos minutos)
+4. Espera a que termine la instalación
+   - Home Assistant descargará el código y construirá la imagen localmente
+   - Esto puede tardar 5-10 minutos la primera vez
 
 ## Paso 3: Configurar el Add-on
 
