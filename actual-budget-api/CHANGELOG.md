@@ -5,6 +5,14 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-02-01
+
+### Corregido
+- Dockerfile: Cambiado de $BUILD_FROM a python:3.12-alpine directamente
+- Eliminada completamente la dependencia de s6-overlay
+- run.sh: Usa python para leer config (igual que Banking Hub)
+- Estructura alineada con el add-on Banking Hub que funciona
+
 ## [1.0.2] - 2026-02-01
 
 ### Corregido
