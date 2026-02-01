@@ -6,10 +6,10 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     && pip3 install --no-cache-dir --break-system-packages \
-        fastapi==0.109.0 \
-        uvicorn==0.27.0 \
-        actualpy==0.28.0 \
-        pydantic==2.5.3
+        fastapi \
+        uvicorn \
+        actualpy \
+        pydantic
 
 # Copy application files
 COPY rest_api.py /app/
