@@ -1,8 +1,11 @@
-#!/usr/bin/with-contenv bashio
+#!/usr/bin/env bashio
+set -e
 
-# Get configuration
-API_PORT=$(bashio::config 'api_port')
-LOG_LEVEL=$(bashio::config 'log_level')
+CONFIG_PATH="/data/options.json"
+
+# Get configuration from Home Assistant options
+API_PORT=$(jq --raw-output '.api_port // 8080' $CONFIG_PATH)
+LOG_LEVEL=$(jq --raw-output '.log_level // "info"' $CONFIG_PATH)
 
 bashio::log.info "Starting Actual Budget REST API..."
 bashio::log.info "API Port: ${API_PORT}"
