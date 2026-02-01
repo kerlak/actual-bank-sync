@@ -1,6 +1,6 @@
 name: "Actual Budget REST API"
 description: "REST API para Actual Budget - Widget iOS y aplicaciones de terceros"
-version: "1.0.5"
+version: "1.0.6"
 slug: "actual_budget_api"
 url: "https://github.com/kerlak/actual-bank-sync"
 
@@ -21,10 +21,16 @@ ports_description:
 options:
   api_port: 2078
   log_level: "info"
+  actual_budget_host: ""
+  actual_budget_ip: ""
+  ignore_ssl: true
 
 schema:
   api_port: port
   log_level: list(debug|info|warning|error)
+  actual_budget_host: "str?"
+  actual_budget_ip: "str?"
+  ignore_ssl: bool
 
 environment:
   PYTHONUNBUFFERED: "1"
