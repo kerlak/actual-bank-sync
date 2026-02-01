@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actual Budget</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 16px; }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        h1 { font-size: 18px; margin: 0; }
+        .settings-btn { background: none; border: none; color: #888; cursor: pointer; padding: 4px; }
+        .settings-btn:hover { color: #fff; }
+        .settings-btn svg { width: 20px; height: 20px; }
+        h2 { font-size: 14px; color: #888; margin: 16px 0 8px; text-transform: uppercase; }
+
+        .config { background: #16213e; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+        .config label { display: block; font-size: 12px; color: #888; margin-top: 12px; }
+        .config input { width: 100%; padding: 8px; margin-top: 4px; background: #0f3460; border: 1px solid #333; border-radius: 4px; color: #fff; font-size: 14px; }
+        .config button { margin-top: 16px; padding: 10px 16px; background: #e94560; border: none; border-radius: 4px; color: #fff; font-size: 14px; cursor: pointer; margin-right: 8px; }
+        .config button:hover { background: #d63850; }
+        .config button.secondary { background: #374151; }
+
+        .status { margin-top: 12px; padding: 8px; border-radius: 4px; font-size: 12px; }
+        .status.ok { background: #065f46; color: #6ee7b7; }
+        .status.error { background: #7f1d1d; color: #fca5a5; }
+
+        .sticky-header { position: sticky; top: 0; background: #1a1a2e; padding-bottom: 8px; z-index: 10; }
+
+        .nav { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+        .nav button { padding: 8px 16px; background: #374151; border: none; border-radius: 4px; color: #fff; cursor: pointer; }
+        .nav span { flex: 1; text-align: center; font-weight: bold; }
+
+        .summary { display: flex; gap: 16px; background: #16213e; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #333; }
+        .summary div { flex: 1; text-align: center; }
+        .summary .label { font-size: 11px; color: #888; text-transform: uppercase; }
+        .summary .value { font-size: 18px; font-weight: bold; margin-top: 4px; }
+        .summary .green { color: #4ade80; }
+        .summary .yellow { color: #fbbf24; }
+        .summary .red { color: #ef4444; }
+
+        .group { margin-bottom: 24px; }
+        .group-header { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; }
+        .group-header span:last-child { color: #888; }
+
+        .category { padding: 12px 0; border-bottom: 1px solid #222; }
+        .category-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+        .category-name { font-size: 14px; }
+        .category-amounts { font-size: 13px; }
+        .category-amounts .spent { color: #888; }
+        .category-amounts .spent.positive { color: #4ade80; }
+        .category-amounts .available { margin-left: 8px; font-weight: bold; }
+        .category-amounts .available.positive { color: #4ade80; }
+        .category-amounts .available.negative { color: #ef4444; }
+
+        .progress { height: 4px; background: #374151; border-radius: 2px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 2px; }
+        .progress-fill.green { background: #4ade80; }
+        .progress-fill.yellow { background: #fbbf24; }
+        .progress-fill.red { background: #ef4444; }
+
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .error { text-align: center; padding: 40px; color: #ef4444; }
+
+        #budget { display: none; }
+        #config-section { display: block; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Actual Budget</h1>
+        <button class="settings-btn" onclick="showConfig()" title="Configuracion">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+        </button>
+    </div>
+
+    <div id="config-section" class="config">
+        <strong>Configuracion</strong>
+
+        <label>URL Actual Budget (ej: https://money.home)</label>
+        <input type="text" id="actual-url" placeholder="https://money.home">
+
+        <label>Password del servidor</label>
+        <input type="password" id="password">
+
+        <label>Nombre del archivo de presupuesto</label>
+        <input type="text" id="file-name" placeholder="Mi Presupuesto">
+
+        <label>Clave de cifrado (dejar vacio si no tiene)</label>
+        <input type="password" id="encryption">
+
+        <div>
+            <button onclick="testConnection()">Probar Conexion</button>
+            <button onclick="saveAndLoad()" class="secondary">Guardar y Cargar</button>
+        </div>
+
+        <div id="status" class="status" style="display:none;"></div>
+    </div>
+
+    <div id="budget">
+        <div class="sticky-header">
+            <div class="nav">
+                <button onclick="changeMonth(-1)">&lt; Anterior</button>
+                <span id="month-title">-</span>
+                <button onclick="changeMonth(1)">Siguiente &gt;</button>
+            </div>
+
+            <div class="summary">
+                <div>
+                    <div class="label">Presupuestado</div>
+                    <div class="value" id="total-budgeted">-</div>
+                </div>
+                <div>
+                    <div class="label">Gastado</div>
+                    <div class="value yellow" id="total-spent">-</div>
+                </div>
+                <div>
+                    <div class="label">Disponible</div>
+                    <div class="value green" id="total-available">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="groups"></div>
+    </div>
+
+    <div id="loading" class="loading" style="display:none;">Cargando...</div>
+    <div id="error" class="error" style="display:none;"></div>
+
+<script>
+const API_BASE = window.location.origin;
+let currentMonth = new Date();
+let config = null;
+
+// Load saved config
+function loadConfig() {
+    try {
+        const saved = localStorage.getItem('budget-config');
+        if (saved) {
+            config = JSON.parse(saved);
+            document.getElementById('actual-url').value = config.actualUrl || '';
+            document.getElementById('password').value = config.password || '';
+            document.getElementById('file-name').value = config.fileName || '';
+            document.getElementById('encryption').value = config.encryption || '';
+            return true;
+        }
+    } catch(e) {}
+    return false;
+}
+
+function saveConfig() {
+    let url = document.getElementById('actual-url').value.trim();
+    // Asegurar que tiene https://
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+        document.getElementById('actual-url').value = url;
+    }
+    config = {
+        actualUrl: url,
+        password: document.getElementById('password').value,
+        fileName: document.getElementById('file-name').value.trim(),
+        encryption: document.getElementById('encryption').value || null
+    };
+    localStorage.setItem('budget-config', JSON.stringify(config));
+}
+
+function showStatus(msg, ok) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = 'status ' + (ok ? 'ok' : 'error');
+    el.style.display = 'block';
+}
+
+async function testConnection() {
+    saveConfig();
+    showStatus('Probando...', true);
+
+    try {
+        const res = await fetch(API_BASE + '/api/validate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                server_url: config.actualUrl,
+                server_password: config.password,
+                file_name: config.fileName,
+                encryption_password: config.encryption
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            const files = data.files.map(f => f.name).join(', ');
+            showStatus('OK! Archivos: ' + files, true);
+        } else {
+            showStatus('Error: ' + (data.detail || 'Fallo'), false);
+        }
+    } catch(e) {
+        showStatus('Error de red: ' + e.message, false);
+    }
+}
+
+function saveAndLoad() {
+    saveConfig();
+    document.getElementById('config-section').style.display = 'none';
+    document.getElementById('budget').style.display = 'block';
+    loadBudget();
+}
+
+function showConfig() {
+    document.getElementById('budget').style.display = 'none';
+    document.getElementById('config-section').style.display = 'block';
+}
+
+function formatCurrency(n) {
+    return new Intl.NumberFormat('es-ES', {style:'currency', currency:'EUR'}).format(n);
+}
+
+function formatMonth(d) {
+    return new Intl.DateTimeFormat('es-ES', {month:'long', year:'numeric'}).format(d);
+}
+
+function changeMonth(delta) {
+    currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1);
+    loadBudget();
+}
+
+async function loadBudget() {
+    if (!config) return;
+
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('groups').innerHTML = '';
+
+    const monthStr = currentMonth.getFullYear() + '-' + String(currentMonth.getMonth()+1).padStart(2,'0');
+
+    try {
+        const res = await fetch(API_BASE + '/api/budget?month=' + monthStr, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                server_url: config.actualUrl,
+                server_password: config.password,
+                file_name: config.fileName,
+                encryption_password: config.encryption
+            })
+        });
+
+        document.getElementById('loading').style.display = 'none';
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Error');
+        }
+
+        const data = await res.json();
+        renderBudget(data);
+
+    } catch(e) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Error: ' + e.message;
+    }
+}
+
+function renderBudget(data) {
+    document.getElementById('month-title').textContent = formatMonth(currentMonth);
+    document.getElementById('total-budgeted').textContent = formatCurrency(data.total_budgeted);
+    document.getElementById('total-spent').textContent = formatCurrency(data.total_spent);
+
+    const avail = data.total_available;
+    const availEl = document.getElementById('total-available');
+    availEl.textContent = formatCurrency(avail);
+    availEl.className = 'value ' + (avail >= 0 ? 'green' : 'red');
+
+    const groupsEl = document.getElementById('groups');
+    groupsEl.innerHTML = '';
+
+    // Solo grupos de gastos
+    const expenseGroups = data.groups.filter(g => !g.is_income);
+
+    for (const group of expenseGroups) {
+        let html = '<div class="group">';
+        html += '<div class="group-header"><span>' + group.name + '</span><span>' + formatCurrency(group.available) + '</span></div>';
+
+        for (const cat of group.categories) {
+            const availClass = cat.available >= 0 ? 'positive' : 'negative';
+            // spent < 0 = gasto, spent > 0 = ingreso
+            const isIncome = cat.spent > 0;
+            let spentClass = isIncome ? 'positive' : '';
+            let progressClass = 'green';
+            if (cat.overspent) progressClass = 'red';
+            else if (cat.progress >= 90) progressClass = 'yellow';
+
+            html += '<div class="category">';
+            html += '<div class="category-row">';
+            html += '<span class="category-name">' + cat.name + '</span>';
+            html += '<span class="category-amounts">';
+            html += '<span class="spent ' + spentClass + '">' + formatCurrency(cat.spent) + '</span>';
+            html += '<span class="available ' + availClass + '">' + formatCurrency(cat.available) + '</span>';
+            html += '</span></div>';
+            // Barra siempre visible si hay presupuesto
+            if (cat.budgeted > 0) {
+                const fillWidth = cat.spent < 0 ? cat.progress : 0;
+                html += '<div class="progress"><div class="progress-fill ' + progressClass + '" style="width:' + fillWidth + '%"></div></div>';
+            }
+            html += '</div>';
+        }
+
+        html += '</div>';
+        groupsEl.innerHTML += html;
+    }
+}
+
+// Init
+if (loadConfig() && config.actualUrl && config.password && config.fileName) {
+    document.getElementById('config-section').style.display = 'none';
+    document.getElementById('budget').style.display = 'block';
+    loadBudget();
+}
+</script>
+</body>
+</html>

@@ -1,19 +1,16 @@
-# Use Python Alpine directly (no s6-overlay)
-FROM python:3.12-alpine
-
-# Install bash, jq and Python dependencies
-RUN apk add --no-cache bash jq \
-    && pip install --no-cache-dir \
-        fastapi \
-        uvicorn \
-        actualpy \
-        pydantic
+# Same base as local build
+FROM python:3.11-slim
 
 WORKDIR /app
+
+# Install requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY rest_api.py .
 COPY run.sh .
+COPY pwa/ ./pwa/
 
 # Make run script executable
 RUN chmod +x run.sh

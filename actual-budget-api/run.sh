@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Read options from Home Assistant add-on config (if available)
 OPTIONS_FILE="/data/options.json"
