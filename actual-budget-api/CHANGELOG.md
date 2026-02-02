@@ -5,6 +5,20 @@ Todos los cambios notables de este proyecto se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-02
+
+### Añadido
+- Sistema de caché con TTL de 5 minutos
+- Endpoint `/api/cache/refresh` para forzar actualización
+- Endpoint `/api/cache/status` para ver estado del caché
+- Endpoint `/api/cache/invalidate` para invalidar caché
+- Todas las respuestas incluyen campo `cached` indicando si usó caché
+
+### Mejoras de rendimiento
+- El presupuesto solo se descarga una vez y se cachea
+- Peticiones subsiguientes usan el caché (respuesta instantánea)
+- Reducción de 3x a 1x descargas por sesión de uso
+
 ## [1.0.4] - 2026-02-01
 
 ### Cambiado

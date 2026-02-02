@@ -1,19 +1,21 @@
-"""REST API server for Actual Budget PWA."""
+"""REST API server for Actual Budget with caching."""
 
 import os
+import hashlib
+import time
 from datetime import datetime, date
 from typing import Optional
+from threading import Lock
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from actual import Actual
 from actual.queries import get_accounts, get_budgets, get_categories, get_category_groups, get_transactions
 
 
-app = FastAPI(title="Actual Budget Widget API", version="2.0.0")
+app = FastAPI(title="Actual Budget Widget API", version="3.0.0")
 
 # CORS
 app.add_middleware(
@@ -32,19 +34,168 @@ class AuthConfig(BaseModel):
     encryption_password: Optional[str] = None
 
 
+# =============================================================================
+# CACHE SYSTEM
+# =============================================================================
+
+class BudgetCache:
+    """Cache for Actual Budget session to avoid repeated downloads."""
+
+    def __init__(self, ttl_seconds: int = 300):  # 5 minutes default
+        self.ttl = ttl_seconds
+        self._actual: Optional[Actual] = None
+        self._config_hash: Optional[str] = None
+        self._last_refresh: float = 0
+        self._lock = Lock()
+
+    def _get_config_hash(self, config: AuthConfig) -> str:
+        """Generate hash from config to detect changes."""
+        data = f"{config.server_url}|{config.file_name}|{config.encryption_password or ''}"
+        return hashlib.md5(data.encode()).hexdigest()
+
+    def _is_valid(self, config: AuthConfig) -> bool:
+        """Check if cache is still valid."""
+        if self._actual is None:
+            return False
+        if self._config_hash != self._get_config_hash(config):
+            return False
+        if time.time() - self._last_refresh > self.ttl:
+            return False
+        return True
+
+    def get_session(self, config: AuthConfig) -> Actual:
+        """Get cached session or create new one."""
+        with self._lock:
+            if not self._is_valid(config):
+                self._refresh(config)
+            return self._actual
+
+    def _refresh(self, config: AuthConfig):
+        """Download budget and cache the session."""
+        # Close old session if exists
+        if self._actual is not None:
+            try:
+                self._actual.__exit__(None, None, None)
+            except:
+                pass
+
+        print(f"[CACHE] Downloading budget from {config.server_url}...")
+        start = time.time()
+
+        self._actual = Actual(
+            base_url=config.server_url,
+            password=config.server_password,
+            encryption_password=config.encryption_password,
+            file=config.file_name,
+            cert=False
+        )
+        self._actual.__enter__()
+        self._actual.download_budget()
+
+        self._config_hash = self._get_config_hash(config)
+        self._last_refresh = time.time()
+
+        elapsed = time.time() - start
+        print(f"[CACHE] Budget downloaded in {elapsed:.2f}s")
+
+    def refresh(self, config: AuthConfig):
+        """Force refresh the cache."""
+        with self._lock:
+            self._refresh(config)
+
+    def invalidate(self):
+        """Invalidate the cache."""
+        with self._lock:
+            if self._actual is not None:
+                try:
+                    self._actual.__exit__(None, None, None)
+                except:
+                    pass
+            self._actual = None
+            self._config_hash = None
+            self._last_refresh = 0
+            print("[CACHE] Cache invalidated")
+
+    def get_status(self) -> dict:
+        """Get cache status."""
+        with self._lock:
+            if self._actual is None:
+                return {
+                    "cached": False,
+                    "age_seconds": None,
+                    "ttl_seconds": self.ttl,
+                    "expires_in": None
+                }
+
+            age = time.time() - self._last_refresh
+            expires_in = max(0, self.ttl - age)
+
+            return {
+                "cached": True,
+                "age_seconds": round(age, 1),
+                "ttl_seconds": self.ttl,
+                "expires_in": round(expires_in, 1),
+                "last_refresh": datetime.fromtimestamp(self._last_refresh).isoformat()
+            }
+
+
+# Global cache instance
+cache = BudgetCache(ttl_seconds=300)  # 5 minutes
+
+
+# =============================================================================
+# ENDPOINTS
+# =============================================================================
+
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "Actual Budget Widget API", "version": "2.0.0"}
+    status = cache.get_status()
+    return {
+        "status": "ok",
+        "service": "Actual Budget Widget API",
+        "version": "3.0.0",
+        "cache": status
+    }
+
+
+@app.post("/api/cache/refresh")
+async def refresh_cache(config: AuthConfig):
+    """Force refresh the budget cache."""
+    try:
+        start = time.time()
+        cache.refresh(config)
+        elapsed = time.time() - start
+        return {
+            "success": True,
+            "message": "Cache refreshed",
+            "elapsed_seconds": round(elapsed, 2),
+            "cache": cache.get_status()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/cache/status")
+async def cache_status():
+    """Get current cache status."""
+    return cache.get_status()
+
+
+@app.post("/api/cache/invalidate")
+async def invalidate_cache():
+    """Invalidate the cache (next request will re-download)."""
+    cache.invalidate()
+    return {"success": True, "message": "Cache invalidated"}
 
 
 @app.post("/api/validate")
 async def validate_connection(config: AuthConfig):
-    """Validate connection to Actual Budget server."""
+    """Validate connection to Actual Budget server (does not use cache)."""
     try:
         with Actual(
             base_url=config.server_url,
             password=config.server_password,
-            cert=False  # Disable SSL verification
+            cert=False
         ) as actual:
             files = actual.list_user_files()
             return {
@@ -59,66 +210,45 @@ async def validate_connection(config: AuthConfig):
 async def get_accounts_list(config: AuthConfig):
     """Get list of accounts with their balances."""
     try:
-        with Actual(
-            base_url=config.server_url,
-            password=config.server_password,
-            encryption_password=config.encryption_password,
-            file=config.file_name,
-            cert=False
-        ) as actual:
-            actual.download_budget()
+        actual = cache.get_session(config)
+        accounts = get_accounts(actual.session)
 
-            accounts = get_accounts(actual.session)
+        result = []
+        total_balance = 0.0
 
-            result = []
-            total_balance = 0.0
+        for acc in accounts:
+            if acc.tombstone or acc.closed:
+                continue
 
-            # Debug: print first account info
-            if accounts:
-                sample = accounts[0]
-                print(f"[DEBUG] Sample account attributes: {[a for a in dir(sample) if not a.startswith('_')]}")
-                print(f"[DEBUG] Sample balance: {getattr(sample, 'balance', 'NO ATTR')}")
-                print(f"[DEBUG] Sample balance type: {type(getattr(sample, 'balance', None))}")
-                if hasattr(sample, 'balance'):
-                    print(f"[DEBUG] Is it callable? {callable(sample.balance)}")
+            balance = 0.0
+            if hasattr(acc, 'balance'):
+                balance_val = acc.balance
+                if callable(balance_val):
+                    balance_val = balance_val()
+                balance = float(balance_val) if balance_val else 0.0
 
-            for acc in accounts:
-                if acc.tombstone or acc.closed:
-                    continue
+            result.append({
+                "id": acc.id,
+                "name": acc.name,
+                "balance": balance,
+                "off_budget": bool(acc.offbudget) if hasattr(acc, 'offbudget') else False,
+                "closed": bool(acc.closed)
+            })
 
-                # Get balance - already in correct format (not cents)
-                balance = 0.0
-                if hasattr(acc, 'balance'):
-                    balance_val = acc.balance
-                    # Check if it's a method or property
-                    if callable(balance_val):
-                        balance_val = balance_val()
-                    # Convert to float (balance is already in correct format)
-                    balance = float(balance_val) if balance_val else 0.0
-                    print(f"[DEBUG] Account {acc.name}: balance={balance}")
+            if not (hasattr(acc, 'offbudget') and acc.offbudget):
+                total_balance += balance
 
-                result.append({
-                    "id": acc.id,
-                    "name": acc.name,
-                    "balance": balance,
-                    "off_budget": bool(acc.offbudget) if hasattr(acc, 'offbudget') else False,
-                    "closed": bool(acc.closed)
-                })
+        result.sort(key=lambda a: (a["off_budget"], a["name"]))
 
-                # Only count on-budget accounts in total
-                if not (hasattr(acc, 'offbudget') and acc.offbudget):
-                    total_balance += balance
-
-            # Sort: on-budget first, then by name
-            result.sort(key=lambda a: (a["off_budget"], a["name"]))
-
-            return {
-                "accounts": result,
-                "total_balance": total_balance,
-                "count": len(result)
-            }
+        return {
+            "accounts": result,
+            "total_balance": total_balance,
+            "count": len(result),
+            "cached": cache.get_status()["cached"]
+        }
 
     except Exception as e:
+        cache.invalidate()  # Invalidate on error
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -131,96 +261,87 @@ async def get_monthly_budget(config: AuthConfig, month: Optional[str] = Query(No
         else:
             target_date = date.today()
 
-        with Actual(
-            base_url=config.server_url,
-            password=config.server_password,
-            encryption_password=config.encryption_password,
-            file=config.file_name,
-            cert=False  # Disable SSL verification
-        ) as actual:
-            actual.download_budget()
+        actual = cache.get_session(config)
 
-            groups = get_category_groups(actual.session)
-            categories = get_categories(actual.session)
-            budgets = get_budgets(actual.session, month=target_date)
+        groups = get_category_groups(actual.session)
+        categories = get_categories(actual.session)
+        budgets = get_budgets(actual.session, month=target_date)
 
-            budget_map = {b.category_id: b for b in budgets}
+        budget_map = {b.category_id: b for b in budgets}
 
-            result_groups = []
+        result_groups = []
 
-            for group in groups:
-                if group.tombstone:
+        for group in groups:
+            if group.tombstone:
+                continue
+
+            group_cats = []
+            group_budgeted = 0.0
+            group_spent = 0.0
+
+            for cat in categories:
+                if cat.cat_group != group.id or cat.tombstone:
                     continue
 
-                group_cats = []
-                group_budgeted = 0.0
-                group_spent = 0.0
+                budget = budget_map.get(cat.id)
 
-                for cat in categories:
-                    if cat.cat_group != group.id or cat.tombstone:
-                        continue
+                if budget:
+                    budgeted = float(budget.get_amount())
+                    spent = float(budget.balance)
+                    carryover = float(budget.carryover or 0) / 100
+                else:
+                    budgeted = 0.0
+                    spent = 0.0
+                    carryover = 0.0
 
-                    budget = budget_map.get(cat.id)
+                available = budgeted + spent + carryover
 
-                    if budget:
-                        budgeted = float(budget.get_amount())
-                        # balance: negativo = gasto, positivo = ingreso
-                        # Mantenemos el signo: spent negativo = gasto, spent positivo = ingreso
-                        spent = float(budget.balance)
-                        carryover = float(budget.carryover or 0) / 100
-                    else:
-                        budgeted = 0.0
-                        spent = 0.0
-                        carryover = 0.0
+                if budgeted > 0 and spent < 0:
+                    progress = (abs(spent) / budgeted * 100)
+                else:
+                    progress = 0
 
-                    # available = presupuesto + lo que queda (spent negativo resta, positivo suma)
-                    available = budgeted + spent + carryover
+                group_cats.append({
+                    "id": cat.id,
+                    "name": cat.name,
+                    "budgeted": budgeted,
+                    "spent": spent,
+                    "available": available,
+                    "progress": min(progress, 100),
+                    "overspent": spent < 0 and abs(spent) > budgeted and budgeted > 0
+                })
 
-                    # Progress solo para gastos (spent negativo) con presupuesto
-                    if budgeted > 0 and spent < 0:
-                        progress = (abs(spent) / budgeted * 100)
-                    else:
-                        progress = 0
+                group_budgeted += budgeted
+                group_spent += spent
 
-                    group_cats.append({
-                        "id": cat.id,
-                        "name": cat.name,
-                        "budgeted": budgeted,
-                        "spent": spent,
-                        "available": available,
-                        "progress": min(progress, 100),
-                        "overspent": spent < 0 and abs(spent) > budgeted and budgeted > 0
-                    })
+            if group_cats:
+                result_groups.append({
+                    "id": group.id,
+                    "name": group.name,
+                    "is_income": bool(group.is_income),
+                    "budgeted": group_budgeted,
+                    "spent": group_spent,
+                    "available": group_budgeted + group_spent,
+                    "categories": sorted(group_cats, key=lambda c: c["name"])
+                })
 
-                    group_budgeted += budgeted
-                    group_spent += spent
+        result_groups.sort(key=lambda g: (not g["is_income"], g["name"]))
 
-                if group_cats:
-                    result_groups.append({
-                        "id": group.id,
-                        "name": group.name,
-                        "is_income": bool(group.is_income),
-                        "budgeted": group_budgeted,
-                        "spent": group_spent,
-                        "available": group_budgeted + group_spent,  # spent negativo resta
-                        "categories": sorted(group_cats, key=lambda c: c["name"])
-                    })
+        expense_groups = [g for g in result_groups if not g["is_income"]]
+        total_budgeted = sum(g["budgeted"] for g in expense_groups)
+        total_spent = sum(g["spent"] for g in expense_groups)
 
-            result_groups.sort(key=lambda g: (not g["is_income"], g["name"]))
-
-            expense_groups = [g for g in result_groups if not g["is_income"]]
-            total_budgeted = sum(g["budgeted"] for g in expense_groups)
-            total_spent = sum(g["spent"] for g in expense_groups)  # será negativo
-
-            return {
-                "month": target_date.strftime("%Y-%m"),
-                "groups": result_groups,
-                "total_budgeted": total_budgeted,
-                "total_spent": total_spent,  # negativo = gastos
-                "total_available": total_budgeted + total_spent  # spent negativo resta
-            }
+        return {
+            "month": target_date.strftime("%Y-%m"),
+            "groups": result_groups,
+            "total_budgeted": total_budgeted,
+            "total_spent": total_spent,
+            "total_available": total_budgeted + total_spent,
+            "cached": cache.get_status()["cached"]
+        }
 
     except Exception as e:
+        cache.invalidate()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -238,115 +359,77 @@ async def get_category_transactions(
         else:
             target_date = date.today()
 
-        # Calculate month start and end
         start_date = target_date.replace(day=1)
         if target_date.month == 12:
             end_date = target_date.replace(year=target_date.year + 1, month=1, day=1)
         else:
             end_date = target_date.replace(month=target_date.month + 1, day=1)
 
-        print(f"[DEBUG] Date range: {start_date} to {end_date}")
+        actual = cache.get_session(config)
 
-        with Actual(
-            base_url=config.server_url,
-            password=config.server_password,
-            encryption_password=config.encryption_password,
-            file=config.file_name,
-            cert=False
-        ) as actual:
-            actual.download_budget()
+        categories = get_categories(actual.session)
+        category = next((c for c in categories if str(c.id) == str(category_id)), None)
+        if not category:
+            raise HTTPException(status_code=404, detail=f"Categoría no encontrada: {category_id}")
 
-            # Get category info
-            categories = get_categories(actual.session)
-            print(f"[DEBUG] All category IDs: {[(c.name, c.id) for c in categories[:5]]}")
-            print(f"[DEBUG] Searching for category_id: '{category_id}'")
+        filtered = get_transactions(
+            actual.session,
+            start_date=start_date,
+            end_date=end_date,
+            category=category
+        )
 
-            # Find the category object by ID
-            category = next((c for c in categories if str(c.id) == str(category_id)), None)
-            if not category:
-                raise HTTPException(status_code=404, detail=f"Categoría no encontrada: {category_id}")
+        result = []
+        for t in filtered[:limit]:
+            try:
+                if hasattr(t, 'get_amount'):
+                    amount = float(t.get_amount())
+                elif hasattr(t, 'amount') and t.amount is not None:
+                    amount = float(t.amount) / 100
+                else:
+                    amount = 0.0
 
-            print(f"[DEBUG] Found category: {category.name} (id={category.id})")
-
-            # Use get_transactions with category filter (native filtering)
-            filtered = get_transactions(
-                actual.session,
-                start_date=start_date,
-                end_date=end_date,
-                category=category  # Pass category object for native filtering
-            )
-
-            print(f"[DEBUG] Filtered transactions with native filter: {len(filtered)}")
-
-            # If no transactions found, also try without category filter to debug
-            if len(filtered) == 0:
-                all_trans = get_transactions(
-                    actual.session,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-                print(f"[DEBUG] Total transactions in range (no filter): {len(all_trans)}")
-                if all_trans:
-                    # Show first 3 transactions with their categories
-                    for i, t in enumerate(all_trans[:3]):
-                        t_cat_id = getattr(t, 'category_id', None)
-                        t_cat_name = getattr(t.category, 'name', None) if hasattr(t, 'category') and t.category else None
-                        print(f"[DEBUG] Transaction {i}: cat_id={t_cat_id}, cat_name={t_cat_name}")
-
-            # Format transactions
-            result = []
-            for t in filtered[:limit]:
-                try:
-                    # Get amount safely using get_amount() method
-                    if hasattr(t, 'get_amount'):
-                        amount = float(t.get_amount())
-                    elif hasattr(t, 'amount') and t.amount is not None:
-                        amount = float(t.amount) / 100
+                trans_date = None
+                if hasattr(t, 'get_date'):
+                    d = t.get_date()
+                    trans_date = d.isoformat() if d else None
+                elif hasattr(t, 'date') and t.date:
+                    if hasattr(t.date, 'isoformat'):
+                        trans_date = t.date.isoformat()
                     else:
-                        amount = 0.0
+                        trans_date = str(t.date)
 
-                    # Get date safely using get_date() method
-                    trans_date = None
-                    if hasattr(t, 'get_date'):
-                        d = t.get_date()
-                        trans_date = d.isoformat() if d else None
-                    elif hasattr(t, 'date') and t.date:
-                        # Fallback: if date is already a date object
-                        if hasattr(t.date, 'isoformat'):
-                            trans_date = t.date.isoformat()
-                        else:
-                            trans_date = str(t.date)
+                result.append({
+                    "id": t.id,
+                    "date": trans_date,
+                    "payee": t.payee.name if t.payee else None,
+                    "notes": t.notes or "",
+                    "amount": amount,
+                    "account": t.account.name if t.account else None,
+                })
+            except:
+                continue
 
-                    result.append({
-                        "id": t.id,
-                        "date": trans_date,
-                        "payee": t.payee.name if t.payee else None,
-                        "notes": t.notes or "",
-                        "amount": amount,
-                        "account": t.account.name if t.account else None,
-                    })
-                except Exception as ex:
-                    print(f"[DEBUG] Error formatting transaction: {ex}")
-                    # Skip problematic transactions
-                    continue
-
-            return {
-                "category_id": category_id,
-                "category_name": category.name,
-                "month": target_date.strftime("%Y-%m"),
-                "transactions": result,
-                "count": len(result)
-            }
+        return {
+            "category_id": category_id,
+            "category_name": category.name,
+            "month": target_date.strftime("%Y-%m"),
+            "transactions": result,
+            "count": len(result),
+            "cached": cache.get_status()["cached"]
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        cache.invalidate()
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Serve PWA static files
+# =============================================================================
+# PWA STATIC FILES
+# =============================================================================
+
 PWA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pwa")
 
 @app.get("/app")
@@ -363,6 +446,4 @@ async def serve_static(filename: str):
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"PWA directory: {PWA_DIR}")
-    print(f"Files in PWA: {os.listdir(PWA_DIR) if os.path.exists(PWA_DIR) else 'NOT FOUND'}")
     uvicorn.run(app, host="0.0.0.0", port=8080)
