@@ -426,6 +426,85 @@ async def get_category_transactions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/transactions/by-note")
+async def get_transactions_by_note(
+    config: AuthConfig,
+    note: str = Query(...),
+    limit: int = Query(100)
+):
+    """Get all transactions with a specific note, grouped by month."""
+    try:
+        actual = cache.get_session(config)
+
+        # Get all transactions (no date filter)
+        all_transactions = get_transactions(actual.session)
+
+        # Filter by note (case-insensitive partial match)
+        note_lower = note.lower().strip()
+        filtered = [
+            t for t in all_transactions
+            if t.notes and note_lower in t.notes.lower()
+        ]
+
+        # Sort by date descending (most recent first)
+        def get_sort_date(t):
+            if hasattr(t, 'get_date'):
+                d = t.get_date()
+                return d if d else date.min
+            return date.min
+
+        filtered.sort(key=get_sort_date, reverse=True)
+
+        # Format transactions with category info
+        result = []
+        for t in filtered[:limit]:
+            try:
+                if hasattr(t, 'get_amount'):
+                    amount = float(t.get_amount())
+                elif hasattr(t, 'amount') and t.amount is not None:
+                    amount = float(t.amount) / 100
+                else:
+                    amount = 0.0
+
+                trans_date = None
+                if hasattr(t, 'get_date'):
+                    d = t.get_date()
+                    trans_date = d.isoformat() if d else None
+                elif hasattr(t, 'date') and t.date:
+                    if hasattr(t.date, 'isoformat'):
+                        trans_date = t.date.isoformat()
+                    else:
+                        trans_date = str(t.date)
+
+                # Get category name
+                category_name = None
+                if hasattr(t, 'category') and t.category:
+                    category_name = t.category.name
+
+                result.append({
+                    "id": t.id,
+                    "date": trans_date,
+                    "payee": t.payee.name if t.payee else None,
+                    "notes": t.notes or "",
+                    "amount": amount,
+                    "account": t.account.name if t.account else None,
+                    "category": category_name,
+                })
+            except:
+                continue
+
+        return {
+            "note": note,
+            "transactions": result,
+            "count": len(result),
+            "cached": cache.get_status()["cached"]
+        }
+
+    except Exception as e:
+        cache.invalidate()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # =============================================================================
 # PWA STATIC FILES
 # =============================================================================
