@@ -505,6 +505,89 @@ async def get_transactions_by_note(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/transactions/by-account")
+async def get_transactions_by_account(
+    config: AuthConfig,
+    account_id: str = Query(...),
+    limit: int = Query(500)
+):
+    """Get all transactions for a specific account."""
+    try:
+        actual = cache.get_session(config)
+
+        # Get all transactions
+        all_transactions = get_transactions(actual.session)
+
+        # Filter by account
+        filtered = [
+            t for t in all_transactions
+            if hasattr(t, 'account') and t.account and str(t.account.id) == account_id
+        ]
+
+        # Sort by date descending (most recent first)
+        def get_sort_date(t):
+            if hasattr(t, 'get_date'):
+                d = t.get_date()
+                return d if d else date.min
+            return date.min
+
+        filtered.sort(key=get_sort_date, reverse=True)
+
+        # Get account name
+        accounts = get_accounts(actual.session)
+        account = next((a for a in accounts if str(a.id) == account_id), None)
+        account_name = account.name if account else "Cuenta"
+
+        # Format transactions
+        result = []
+        for t in filtered[:limit]:
+            try:
+                if hasattr(t, 'get_amount'):
+                    amount = float(t.get_amount())
+                elif hasattr(t, 'amount') and t.amount is not None:
+                    amount = float(t.amount) / 100
+                else:
+                    amount = 0.0
+
+                trans_date = None
+                if hasattr(t, 'get_date'):
+                    d = t.get_date()
+                    trans_date = d.isoformat() if d else None
+                elif hasattr(t, 'date') and t.date:
+                    if hasattr(t.date, 'isoformat'):
+                        trans_date = t.date.isoformat()
+                    else:
+                        trans_date = str(t.date)
+
+                # Get category name
+                category_name = None
+                if hasattr(t, 'category') and t.category:
+                    category_name = t.category.name
+
+                result.append({
+                    "id": t.id,
+                    "date": trans_date,
+                    "payee": t.payee.name if t.payee else None,
+                    "notes": t.notes or "",
+                    "amount": amount,
+                    "category": category_name,
+                })
+            except:
+                continue
+
+        return {
+            "account_id": account_id,
+            "account_name": account_name,
+            "transactions": result,
+            "count": len(result),
+            "cached": cache.get_status()["cached"]
+        }
+
+    except Exception as e:
+        cache.invalidate()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # =============================================================================
 # PWA STATIC FILES
 # =============================================================================
